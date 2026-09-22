@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>R2D2 // Listening room</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">BEARBONE STUDIO · LOCAL AUDIO LAB</div>
+      <h1>R2D2 <span>//</span> LISTENING ROOM</h1>
+      <p>声音在此刻，文字随之而来。</p>
+      <div class="header-meta"><span>CONFUCIUS4–R2T2</span><span>APPLE SILICON</span><span>本机推理</span></div>
+    </header>
+
+    <div class="workspace">
+      <aside class="panel controls">
+        <div class="section-title"><span>01 // INPUT</span><span class="quiet">输入</span></div>
+        <fieldset id="settings">
+          <legend class="sr-only">录音设置</legend>
+          <label class="label">识别模型 <span>ENGINE</span></label>
+          <div class="segmented" role="group" aria-label="识别模型">
+            <button type="button" class="engine selected" data-engine="gguf" aria-pressed="true">GGUF <small>F16</small></button>
+            <button type="button" class="engine" data-engine="gguf_q8" aria-pressed="false">GGUF <small>Q8</small></button>
+            <button type="button" class="engine" data-engine="gguf_q4" aria-pressed="false">GGUF <small>Q4</small></button>
+            <button type="button" class="engine" data-engine="mlx" aria-pressed="false">MLX <small>BF16</small></button>
+          </div>
+          <div class="model-note" id="model-note">官方 GGUF · F16 主权重 + F16 音频投影</div>
+          <div class="field"><label for="language" class="label">识别语言 <span>LANGUAGE</span></label>
+            <select id="language"><option value="Chinese">中文 Chinese</option><option value="English">英文 English</option><option value="Japanese">日文 Japanese</option><option value="Korean">韩文 Korean</option><option value="Spanish">西班牙文 Spanish</option><option value="auto">自动识别 Auto</option></select>
+          </div>
+          <div class="field"><label for="microphone" class="label">麦克风 <span>SOURCE</span></label>
+            <select id="microphone"><option value="">系统默认输入</option></select>
+          </div>
+          <div class="field"><label for="processing" class="label">声音处理 <span>CAPTURE</span></label>
+            <select id="processing"><option value="browser">浏览器降噪 · 与官方网页一致</option><option value="raw">原始输入 · 关闭浏览器处理</option></select>
+            <p class="hint" id="capture-hint">降噪、回声消除开启；自动增益关闭。</p>
+          </div>
+          <details><summary>热词与领域提示 <span>＋</span></summary><label class="sr-only" for="context">热词与领域提示</label><textarea id="context" maxlength="4000" rows="3" placeholder="人名、产品名、专有名词，或一句话说明谈话主题&#10;例如：熊骨头、Confucius4、MLX；本段在讨论语音识别量化"></textarea><p class="hint">官方称为 context：写进提示词，帮助模型认出容易听错的专有名词，并给出领域倾向。留空即可。</p></details>
+        </fieldset>
+        <div class="capture-box">
+          <div class="capture-meta"><span id="source-label">MICROPHONE</span><span id="timer">00:00</span></div>
+          <canvas id="meter" height="64" aria-label="麦克风输入音量"></canvas>
+          <div class="level"><span>INPUT LEVEL</span><span id="db">— dBFS</span></div>
+          <button id="record" class="primary"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="1" width="5" height="9" rx="2.5"/><path d="M3 7v1a5 5 0 0 0 10 0V7M8 13v3M5 16h6"/></svg><span>开始聆听</span></button>
+          <button id="stop" class="primary" hidden><span class="stop-icon"></span>停止并完成识别</button>
+          <div class="secondary-actions"><button id="replay" disabled>↻ 重放上一段</button><label class="file-button" for="file">↑ 导入音频</label><input id="file" type="file" accept="audio/*" hidden></div>
+          <p class="hint bottom-hint">同一段声音，切换模型再听一次。</p>
+          <button id="sample" class="sample-button">用官方示例试跑 →</button>
+        </div>
+      </aside>
+
+      <section class="panel output">
+        <div class="section-title"><span>02 // TRANSCRIPT</span><span id="state" role="status"><i></i>待机</span></div>
+        <div class="session-meta"><span id="session-engine">GGUF / F16</span><span>STREAMING · 160 ms</span><span id="detected">中文</span></div>
+        <div id="transcript-area" class="transcript-area" tabindex="0" aria-label="识别文字">
+          <div id="empty"><div class="empty-symbol" aria-hidden="true">[ <span>· · ·</span> ]</div><h2>准备好，就开始说。</h2><p>边说边识别，文字将在这里连续出现。<br>也可以导入音频，比较不同模型的表现。</p></div>
+          <div id="transcript" hidden><span id="confirmed"></span><span id="draft"></span><span id="caret" hidden>▏</span></div>
+        </div>
+        <div id="notice" role="alert" hidden></div>
+        <div class="output-actions"><span id="count">0 字符</span><div><button id="copy" disabled>复制文字</button><button id="export" disabled>导出记录 ↓</button></div></div>
+        <div class="metrics">
+          <div><span>FIRST TEXT</span><strong id="first">—<small> ms</small></strong><p>首字等待</p></div>
+          <div><span>DECODE / STEP</span><strong id="decode">—<small> ms</small></strong><p>单步识别耗时</p></div>
+          <div><span>AUDIO BACKLOG</span><strong id="backlog">—<small> ms</small></strong><p>待处理音频</p></div>
+        </div>
+      </section>
+    </div>
+    <section class="runs" id="runs-section" hidden>
+      <div class="section-title"><span>03 // LISTENING NOTES</span><span class="quiet">本页内保留 · 刷新即清空</span></div>
+      <div id="runs"></div>
+    </section>
+    <footer><span><b>●</b> <span id="health">正在连接本机服务</span></span><span>16 kHz · MONO · PCM16</span><span>WINDOW 8 s / ROLLBACK 1 TOKEN</span><span>R2D2 // 0.1</span></footer>
+    <p class="footnote">Mac 流式适配 · 共用官方分块与文字续接策略；运行引擎不同，效果由你判断。音频仅留在当前页面内存中。</p>
+  </main>
+</body>
+</html>

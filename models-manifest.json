@@ -1,0 +1,47 @@
+{
+  "verified_date": "2026-09-22",
+  "files": [
+    {
+      "path": "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-f16.gguf",
+      "sha256": "4fa26b8f2d6db9122752d3e28694c26083bad95f6263d2f7619c7f98f2480b97",
+      "bytes": 3447345088
+    },
+    {
+      "path": "models/Confucius4-R2T2-GGUF/mmproj-Confucius4-R2T2-f16.gguf",
+      "sha256": "0057b28b8814e431a28e3d1002343eef2d1676bbf8b0625351ae4550ac4e595d",
+      "bytes": 641773984
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/model.safetensors",
+      "sha256": "e427f2f473bc3310e8be38b244bc20be09b546fb7353b16414d2500e517db6c2",
+      "bytes": 4076186653
+    },
+    {
+      "path": "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-Q8_0.gguf",
+      "sha256": "151097e43957a19984ea7de66e8144ce69b95039eb31c93da4f58db367e455c3",
+      "bytes": 1834422208,
+      "source_repo": "netease-youdao/Confucius4-R2T2-GGUF",
+      "source_revision": "86ff0251cb9f456b63aeef5f80137f104e22869a",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-Q8_0.gguf",
+      "verified_date": "2026-09-22"
+    },
+    {
+      "path": "models/Confucius4-R2T2-GGUF/mmproj-Confucius4-R2T2-Q8_0.gguf",
+      "sha256": "8dc2c67e6a0484114928142d098db7ad94ae9f34c78948ef9d37a9678418cb65",
+      "bytes": 348336544,
+      "source_repo": "netease-youdao/Confucius4-R2T2-GGUF",
+      "source_revision": "86ff0251cb9f456b63aeef5f80137f104e22869a",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/mmproj-Confucius4-R2T2-Q8_0.gguf",
+      "verified_date": "2026-09-22"
+    },
+    {
+      "path": "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-Q4_K_M.gguf",
+      "sha256": "fa3cb46c8c3a66a58812b9098ba6e96a0266d4e8c9b3cf5ba34432fd2f9f6466",
+      "bytes": 1107404736,
+      "source_repo": "netease-youdao/Confucius4-R2T2-GGUF",
+      "source_revision": "86ff0251cb9f456b63aeef5f80137f104e22869a",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-Q4_K_M.gguf",
+      "verified_date": "2026-09-22"
+    }
+  ]
+}

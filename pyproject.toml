@@ -1,0 +1,17 @@
+[project]
+name = "r2d2-listening-room"
+version = "0.1.0"
+description = "Local Confucius4-R2T2 streaming comparison on Apple Silicon"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "mlx-audio==0.5.5",
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "httpx==0.28.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
