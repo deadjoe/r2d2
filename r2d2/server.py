@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from .backends import GGUFBackend, MLXBackend, GGUF_PATH, GGUF_VARIANTS, MLX_PATH
 from .streaming import Stream, RATE, HOP, WINDOW, MAX_HOPS
+from .translate import LiveTranslation, Translator, MT_FILE
 
 ROOT = Path(__file__).resolve().parents[1]
 log = logging.getLogger("r2d2")
@@ -31,7 +32,8 @@ class Engine:
         # All Metal work, including model destruction, stays on one worker thread.
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="inference")
         self.backend = None
-        self.name = "gguf"
+        # The chosen default after the far-field comparison; see docs/validation.md.
+        self.name = "gguf_q8"
         self.state = "unloaded"
         self.busy = False
         self.lock = asyncio.Lock()
@@ -76,7 +78,50 @@ class Engine:
                            "mlx": (MLX_PATH / "model.safetensors").is_file()}}
 
 
+class TranslationEngine:
+    """HY-MT on the CPU, loaded on first use and kept: about 1.2 GB of RAM and no
+    GPU. Its own worker thread, so a translation never queues behind a decode."""
+
+    def __init__(self):
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="translate")
+        self.translator = None
+        self.state = "unloaded"
+        self.error = ""
+        self.lock = asyncio.Lock()
+
+    async def call(self, fn, *args):
+        return await asyncio.get_running_loop().run_in_executor(self.executor, fn, *args)
+
+    async def load(self):
+        async with self.lock:
+            if self.translator:
+                return
+            self.state, self.error = "loading", ""
+            translator = Translator()
+            try:
+                await self.call(translator.load)
+            except Exception as exc:
+                await self.call(translator.close)
+                self.state, self.error = "error", str(exc)
+                raise
+            self.translator, self.state = translator, "ready"
+
+    async def translate(self, text):
+        return await self.call(self.translator.translate, text)
+
+    def status(self):
+        return {"model": MT_FILE, "available": Translator.available(), "state": self.state,
+                "error": self.error}
+
+    async def close(self):
+        if self.translator:
+            await self.call(self.translator.close)
+            self.translator = None
+        self.executor.shutdown(wait=True)
+
+
 engine = Engine()
+translation = TranslationEngine()
 
 
 @asynccontextmanager
@@ -85,6 +130,7 @@ async def lifespan(app):
     if engine.backend:
         await engine.call(engine.backend.close)
     engine.executor.shutdown(wait=True)
+    await translation.close()
 
 
 app = FastAPI(title="R2D2 // Listening room", lifespan=lifespan)
@@ -96,9 +142,15 @@ async def index():
     return FileResponse(ROOT / "web/index.html")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    # For clients that ask for the conventional path instead of the <link>.
+    return FileResponse(ROOT / "web/favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/api/status")
 async def status():
-    return engine.status()
+    return {**engine.status(), "translation": translation.status()}
 
 
 @app.get("/api/sample")
@@ -123,7 +175,7 @@ async def select(selection: Selection):
 
 
 class SessionOptions(BaseModel):
-    backend: str = Field(default="gguf", pattern="^(gguf|gguf_q8|gguf_q4|mlx)$")
+    backend: str = Field(default="gguf_q8", pattern="^(gguf|gguf_q8|gguf_q4|mlx)$")
     # Names must match the model's own config.json support_languages entries;
     # they are written straight into the prompt's language tag.
     language: str = Field(
@@ -132,6 +184,8 @@ class SessionOptions(BaseModel):
     )
     # Upstream caps the prompt-borne hint at MAX_SYSTEM_PROMPT_CHARS.
     context: str = Field(default="", max_length=4000)
+    # Live translation into Chinese. Pointless when Chinese is what is spoken.
+    translate: bool = False
 
 
 @app.websocket("/api/stream")
@@ -139,6 +193,13 @@ async def stream_socket(ws: WebSocket):
     await ws.accept()
     owned = False
     receive_task = None
+    live = None
+    send_lock = asyncio.Lock()
+
+    async def send(message):
+        # Transcript and translation updates come from two tasks; one frame at a time.
+        async with send_lock:
+            await ws.send_json(message)
     try:
         options = SessionOptions.model_validate_json(await asyncio.wait_for(ws.receive_text(), 15))
         async with engine.lock:
@@ -151,8 +212,15 @@ async def stream_socket(ws: WebSocket):
             await engine.load(options.backend)
         session = Stream(engine.backend, None if options.language == "auto" else options.language,
                          options.context)
+        if options.translate and options.language != "Chinese":
+            try:
+                await translation.load()
+                live = LiveTranslation(translation.translate, send)
+            except Exception as exc:
+                # Recognition does not depend on translation; say so and carry on.
+                await ws.send_json({"type": "translation_error", "message": f"翻译模型不可用：{exc}"})
         await ws.send_json({"type": "ready", "backend": options.backend, "sample_rate": RATE,
-                            "chunk_ms": 160})
+                            "chunk_ms": 160, "translate": live is not None})
         queue = asyncio.Queue(maxsize=64)
         received = 0
 
@@ -213,7 +281,9 @@ async def stream_socket(ws: WebSocket):
                     first_text_ms = round((time.perf_counter() - started) * 1000)
                 update["backlog_ms"] = round(max(0, received - session.processed) / RATE * 1000)
                 update["first_text_ms"] = first_text_ms
-                await ws.send_json(update)
+                await send(update)
+                if live:
+                    live.update(update["text"], update["draft"])
             if stopped:
                 break
         final = await engine.call(session.finish)
@@ -221,9 +291,13 @@ async def stream_socket(ws: WebSocket):
             first_text_ms = round((time.perf_counter() - started) * 1000)
         final["backlog_ms"] = 0
         final["first_text_ms"] = first_text_ms
-        await ws.send_json(final)
-        await ws.send_json({"type": "done", "backend": options.backend,
-                            "audio_ms": round(received / RATE * 1000)})
+        await send(final)
+        if live:
+            live.update(final["text"], final=True)
+            await live.finish()
+            await send(live.snapshot())
+        await send({"type": "done", "backend": options.backend,
+                    "audio_ms": round(received / RATE * 1000)})
         await ws.close()
     except WebSocketDisconnect:
         pass
@@ -232,11 +306,13 @@ async def stream_socket(ws: WebSocket):
     except Exception as exc:
         log.exception("Streaming session failed")
         try:
-            await ws.send_json({"type": "error", "message": str(exc)})
+            await send({"type": "error", "message": str(exc)})
             await ws.close(code=1011)
         except Exception:
             pass
     finally:
+        if live:
+            await live.close()
         if receive_task:
             receive_task.cancel()
             await asyncio.gather(receive_task, return_exceptions=True)

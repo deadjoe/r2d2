@@ -42,6 +42,15 @@
       "source_revision": "86ff0251cb9f456b63aeef5f80137f104e22869a",
       "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-Q4_K_M.gguf",
       "verified_date": "2026-09-22"
+    },
+    {
+      "path": "models/HY-MT1.5-1.8B-GGUF/HY-MT1.5-1.8B-Q4_K_M.gguf",
+      "sha256": "4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7",
+      "bytes": 1133080512,
+      "source_repo": "tencent/HY-MT1.5-1.8B-GGUF",
+      "source_revision": "265b2e615a7dc9b06c435dc878829ad99a512ba2",
+      "source_url": "https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/265b2e615a7dc9b06c435dc878829ad99a512ba2/HY-MT1.5-1.8B-Q4_K_M.gguf",
+      "verified_date": "2026-09-23"
     }
   ]
 }

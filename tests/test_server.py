@@ -11,6 +11,7 @@ def client(monkeypatch):
     backend = Backend()
     backend.close = lambda: None
     engine.backend = backend
+    engine.name = "gguf"
     engine.state = "ready"
     monkeypatch.setattr(server, "engine", engine)
     with TestClient(server.app) as client:
@@ -136,3 +137,68 @@ def test_hint_accepts_upstreams_full_length(client):
     with connect(client) as ws:
         ws.send_json({"backend": "gguf", "language": "Chinese", "context": "词" * 4001})
         assert ws.receive_json()["type"] == "error"
+
+
+class FakeTranslation:
+    def __init__(self, fail=False):
+        self.fail, self.loads = fail, 0
+
+    async def load(self):
+        self.loads += 1
+        if self.fail:
+            raise RuntimeError("no model")
+
+    async def translate(self, text):
+        return f"<{text}>"
+
+    async def close(self):
+        pass
+
+
+def run_session(ws, language, translate=True):
+    ws.send_json({"backend": "gguf", "language": language, "translate": translate})
+    assert ws.receive_json()["type"] == "loading"
+    messages = [ws.receive_json()]
+    while messages[-1]["type"] not in ("ready", "error"):
+        messages.append(ws.receive_json())
+    for _ in range(4):
+        ws.send_bytes(bytes(5120))
+    ws.send_text("stop")
+    while messages[-1]["type"] not in ("done", "error"):
+        messages.append(ws.receive_json())
+    return messages
+
+
+def test_translation_streams_beside_the_transcript_and_settles_before_done(client, monkeypatch):
+    fake = FakeTranslation()
+    monkeypatch.setattr(server, "translation", fake)
+    server.engine.backend.output = "Hi. Yo"
+    with connect(client) as ws:
+        messages = run_session(ws, "English")
+    ready = next(m for m in messages if m["type"] == "ready")
+    assert ready["translate"] is True
+    final = [m for m in messages if m["type"] == "translation"][-1]
+    assert final["final"] and final["draft"] == "" and final["text"].startswith("<Hi.>")
+    transcript = [m for m in messages if m["type"] == "transcript"][-1]
+    assert transcript["final"]
+    assert messages.index(final) > messages.index(transcript)
+    assert messages[-1]["type"] == "done"
+
+
+def test_chinese_sessions_never_load_the_translator(client, monkeypatch):
+    fake = FakeTranslation()
+    monkeypatch.setattr(server, "translation", fake)
+    with connect(client) as ws:
+        messages = run_session(ws, "Chinese")
+    assert fake.loads == 0
+    assert not any(m["type"] == "translation" for m in messages)
+    assert next(m for m in messages if m["type"] == "ready")["translate"] is False
+
+
+def test_missing_translator_degrades_to_recognition_only(client, monkeypatch):
+    monkeypatch.setattr(server, "translation", FakeTranslation(fail=True))
+    with connect(client) as ws:
+        messages = run_session(ws, "English")
+    types = [m["type"] for m in messages]
+    assert types[0] == "translation_error" and "ready" in types and types[-1] == "done"
+    assert "translation" not in types

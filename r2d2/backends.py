@@ -35,6 +35,54 @@ def wav_bytes(audio: np.ndarray) -> bytes:
     return out.getvalue()
 
 
+def start_llama_server(args, log_name, label, timeout=120):
+    """Private llama-server child bound to a random loopback port. The web app
+    binds 0.0.0.0; inference processes never do. Returns (process, client, log)."""
+    binary = shutil.which("llama-server")
+    if not binary:
+        raise RuntimeError("缺少 llama-server，请运行 brew install llama.cpp")
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    (ROOT / ".runtime").mkdir(exist_ok=True)
+    log = (ROOT / ".runtime" / log_name).open("w")
+    process = subprocess.Popen(
+        [binary, "-m", *args, "--parallel", "1", "--host", "127.0.0.1", "--port", str(port),
+         "--no-webui", "--no-warmup", "--log-disable"],
+        stdout=log, stderr=log,
+    )
+    client = httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=90, trust_env=False)
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError(f"{label} 启动失败，详情见 .runtime/{log_name}")
+            try:
+                if client.get("/health").status_code == 200:
+                    return process, client, log
+            except httpx.HTTPError:
+                pass
+            time.sleep(0.2)
+        raise RuntimeError(f"{label} 加载超时")
+    except BaseException:
+        stop_llama_server(process, client, log)
+        raise
+
+
+def stop_llama_server(process, client, log):
+    if client:
+        client.close()
+    if process and process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+    if log:
+        log.close()
+
+
 class GGUFBackend:
     name = "gguf"
 
@@ -48,45 +96,20 @@ class GGUFBackend:
     def load(self):
         from transformers import AutoTokenizer
 
-        binary = shutil.which("llama-server")
-        if not binary:
-            raise RuntimeError("缺少 llama-server，请运行 brew install llama.cpp")
         model = GGUF_PATH / self.model_file
         projector = GGUF_PATH / self.projector_file
         for path in (model, projector, MLX_PATH / "tokenizer.json"):
             if not path.is_file():
                 raise RuntimeError(f"缺少本地模型文件：{path}")
         self.tokenizer = AutoTokenizer.from_pretrained(MLX_PATH, local_files_only=True)
-        # Bind the private inference process only to loopback. The web app binds 0.0.0.0.
-        with socket.socket() as sock:
-            sock.bind(("127.0.0.1", 0))
-            port = sock.getsockname()[1]
-        (ROOT / ".runtime").mkdir(exist_ok=True)
-        self.log = (ROOT / ".runtime/llama-server.log").open("w")
-        self.process = subprocess.Popen(
-            [binary, "-m", str(model), "--mmproj", str(projector), "-ngl", "99",
+        self.process, self.client, self.log = start_llama_server(
+            [str(model), "--mmproj", str(projector), "-ngl", "99",
              # Every step carries new audio, so a saved prompt state can never be
              # reused; the default 8 GiB host-RAM prompt cache only fills up.
              # Upstream's native backend clears memory on every call for the same reason.
-             "-c", "4096", "--cache-ram", "0",
-             "--parallel", "1", "--host", "127.0.0.1", "--port", str(port),
-             "--no-webui", "--no-warmup", "--log-disable"],
-            stdout=self.log, stderr=self.log,
-        )
-        self.client = httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=90, trust_env=False)
-        deadline = time.monotonic() + 120
-        while time.monotonic() < deadline:
-            if self.process.poll() is not None:
-                raise RuntimeError("GGUF 启动失败，详情见 .runtime/llama-server.log")
-            try:
-                if self.client.get("/health").status_code == 200:
-                    props = self.client.get("/props").json()
-                    self.marker = props.get("media_marker", "<__media__>")
-                    return
-            except httpx.HTTPError:
-                pass
-            time.sleep(0.2)
-        raise RuntimeError("GGUF 加载超时")
+             "-c", "4096", "--cache-ram", "0"],
+            "llama-server.log", "GGUF")
+        self.marker = self.client.get("/props").json().get("media_marker", "<__media__>")
 
     def decode(self, audio, prefix, language, context, max_tokens):
         assistant = (f"language {language}<asr_text>" if language else "") + prefix
@@ -105,17 +128,7 @@ class GGUFBackend:
         return response.json()["content"]
 
     def close(self):
-        if self.client:
-            self.client.close()
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait()
-        if self.log:
-            self.log.close()
+        stop_llama_server(self.process, self.client, self.log)
 
 
 class MLXBackend:

@@ -25,3 +25,11 @@ NetEase Model Use License Agreement; see the model's included `MODEL_LICENSE`
 and https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF .
 
 No commercial Berkeley Mono font files are distributed.
+
+The live translation model, `tencent/HY-MT1.5-1.8B-GGUF` (Q4_K_M), is also
+excluded from version control and is used unmodified through llama.cpp. It
+carries the Tencent HY Community License Agreement, downloaded next to the
+weights as `models/HY-MT1.5-1.8B-GGUF/License.txt`; that license does not
+apply in, and grants no rights for, the European Union, the United Kingdom and
+South Korea. `r2d2/translate.py` uses the prompt template from the model card;
+no Tencent code is copied.
