@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
@@ -13,81 +13,81 @@
     <header>
       <div class="eyebrow">BEARBONE STUDIO · LOCAL AUDIO LAB</div>
       <h1>R2D2 <span>//</span> LISTENING ROOM</h1>
-      <p>声音在此刻，文字随之而来。</p>
-      <div class="header-meta"><span>CONFUCIUS4–R2T2</span><span>APPLE SILICON</span><span>本机推理</span></div>
+      <p>The sound is now. The words follow.</p>
+      <div class="header-meta"><span>CONFUCIUS4–R2T2</span><span>APPLE SILICON</span><span>ON-DEVICE</span></div>
     </header>
 
     <div class="workspace">
       <aside class="panel controls">
-        <div class="section-title"><span>01 // INPUT</span><span class="quiet">输入</span></div>
+        <div class="section-title"><span>01 // INPUT</span><span class="quiet">Settings</span></div>
         <fieldset id="settings">
-          <legend class="sr-only">录音设置</legend>
-          <label class="label">识别模型 <span>ENGINE</span></label>
-          <div class="segmented" role="group" aria-label="识别模型">
+          <legend class="sr-only">Recording settings</legend>
+          <label class="label">Recognition model <span>ENGINE</span></label>
+          <div class="segmented" role="group" aria-label="Recognition model">
             <button type="button" class="engine" data-engine="gguf" aria-pressed="false">GGUF <small>F16</small></button>
             <button type="button" class="engine selected" data-engine="gguf_q8" aria-pressed="true">GGUF <small>Q8</small></button>
             <button type="button" class="engine" data-engine="gguf_q4" aria-pressed="false">GGUF <small>Q4</small></button>
             <button type="button" class="engine" data-engine="mlx" aria-pressed="false">MLX <small>BF16</small></button>
           </div>
-          <div class="model-note" id="model-note">官方 GGUF · Q8_0 主权重 + Q8_0 音频投影</div>
-          <div class="field"><label for="language" class="label">识别语言 <span>LANGUAGE</span></label>
-            <select id="language"><option value="Chinese">中文 Chinese</option><option value="English">英文 English</option><option value="Japanese">日文 Japanese</option><option value="Korean">韩文 Korean</option><option value="Spanish">西班牙文 Spanish</option><option value="auto">自动识别 Auto</option></select>
+          <div class="model-note" id="model-note">Official GGUF · Q8_0 + Q8_0 projector</div>
+          <div class="field"><label for="language" class="label">Language <span>SPOKEN</span></label>
+            <select id="language"><option value="Chinese">Chinese</option><option value="English">English</option><option value="Japanese">Japanese</option><option value="Korean">Korean</option><option value="Spanish">Spanish</option><option value="auto">Auto-detect</option></select>
           </div>
-          <div class="field"><label for="translate" class="label">实时翻译 <span>TRANSLATE</span></label>
-            <select id="translate"><option value="zh">译为中文 · HY-MT1.5 1.8B</option><option value="off">关闭</option></select>
-            <p class="hint" id="translate-hint">整句定稿，半句灰字预览；在 CPU 上运行。</p>
+          <div class="field"><label for="translate" class="label">Translate <span>LIVE</span></label>
+            <select id="translate"><option value="zh">To Chinese · HY-MT1.5 1.8B</option><option value="off">Off</option></select>
+            <p class="hint" id="translate-hint">Per sentence, grey preview, on CPU.</p>
           </div>
-          <div class="field"><label for="microphone" class="label">麦克风 <span>SOURCE</span></label>
-            <select id="microphone"><option value="">系统默认输入</option></select>
+          <div class="field"><label for="microphone" class="label">Microphone <span>SOURCE</span></label>
+            <select id="microphone"><option value="">Default input</option></select>
           </div>
-          <div class="field"><label for="processing" class="label">声音处理 <span>CAPTURE</span></label>
-            <select id="processing"><option value="browser">浏览器降噪 · 与官方网页一致</option><option value="raw">原始输入 · 关闭浏览器处理</option></select>
-            <p class="hint" id="capture-hint">降噪、回声消除开启；自动增益关闭。</p>
+          <div class="field"><label for="processing" class="label">Audio processing <span>CAPTURE</span></label>
+            <select id="processing"><option value="browser">Browser processing (default)</option><option value="raw">Raw input · processing off</option></select>
+            <p class="hint" id="capture-hint">Denoise and echo cancel on; AGC off.</p>
           </div>
-          <details><summary>热词与领域提示 <span>＋</span></summary><label class="sr-only" for="context">热词与领域提示</label><textarea id="context" maxlength="4000" rows="3" placeholder="人名、产品名、专有名词，或一句话说明谈话主题&#10;例如：熊骨头、Confucius4、MLX；本段在讨论语音识别量化"></textarea><p class="hint">官方称为 context：写进提示词，帮助模型认出容易听错的专有名词，并给出领域倾向。留空即可。</p></details>
+          <details><summary>Hotwords &amp; topic hint <span>＋</span></summary><label class="sr-only" for="context">Hotwords and topic hint</label><textarea id="context" maxlength="4000" rows="3" placeholder="Names, products, jargon, or one line on the topic&#10;e.g. Bearbone, Confucius4, MLX; a talk about ASR quantization"></textarea><p class="hint">Upstream calls this context. It goes into the prompt to help the model catch easily misheard terms and lean toward a topic. Optional.</p></details>
         </fieldset>
         <div class="capture-box">
           <div class="capture-meta"><span id="source-label">MICROPHONE</span><span id="timer">00:00</span></div>
-          <canvas id="meter" height="64" aria-label="麦克风输入音量"></canvas>
+          <canvas id="meter" height="64" aria-label="Microphone input level"></canvas>
           <div class="level"><span>INPUT LEVEL</span><span id="db">— dBFS</span></div>
-          <button id="record" class="primary"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="1" width="5" height="9" rx="2.5"/><path d="M3 7v1a5 5 0 0 0 10 0V7M8 13v3M5 16h6"/></svg><span>开始聆听</span></button>
-          <button id="stop" class="primary" hidden><span class="stop-icon"></span>停止并完成识别</button>
-          <div class="secondary-actions"><button id="replay" disabled>↻ 重放上一段</button><label class="file-button" for="file">↑ 导入音频</label><input id="file" type="file" accept="audio/*" hidden></div>
-          <p class="hint bottom-hint">同一段声音，切换模型再听一次。</p>
-          <button id="sample" class="sample-button">用官方示例试跑 →</button>
+          <button id="record" class="primary"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="1" width="5" height="9" rx="2.5"/><path d="M3 7v1a5 5 0 0 0 10 0V7M8 13v3M5 16h6"/></svg><span>Start listening</span></button>
+          <button id="stop" class="primary" hidden><span class="stop-icon"></span>Stop and finish</button>
+          <div class="secondary-actions"><button id="replay" disabled>↻ Replay last take</button><label class="file-button" for="file">↑ Import audio</label><input id="file" type="file" accept="audio/*" hidden></div>
+          <p class="hint bottom-hint">Replay the same audio on another model.</p>
+          <button id="sample" class="sample-button">Try the official sample →</button>
         </div>
       </aside>
 
       <section class="panel output">
-        <div class="section-title"><span>02 // TRANSCRIPT</span><div class="title-actions"><span id="state" role="status"><i></i>待机</span><button type="button" id="focus" class="focus-button" aria-pressed="false" title="放大识别与翻译区域（Esc 还原）">⤢ 放大</button></div></div>
-        <div class="session-meta"><span id="session-engine">GGUF / Q8_0</span><span>STREAMING · 160 ms</span><span id="detected">中文</span></div>
-        <div id="transcript-area" class="transcript-area" tabindex="0" aria-label="识别文字">
-          <div id="empty"><div class="empty-symbol" aria-hidden="true">[ <span>· · ·</span> ]</div><h2>准备好，就开始说。</h2><p>边说边识别，文字将在这里连续出现。<br>也可以导入音频，比较不同模型的表现。</p></div>
+        <div class="section-title"><span>02 // TRANSCRIPT</span><div class="title-actions"><span id="state" role="status"><i></i>Idle</span><button type="button" id="focus" class="focus-button" aria-pressed="false" title="Expand transcript and translation (Esc to restore)">⤢ Expand</button></div></div>
+        <div class="session-meta"><span id="session-engine">GGUF / Q8_0</span><span>STREAMING · 160 ms</span><span id="detected">Chinese</span></div>
+        <div id="transcript-area" class="transcript-area" tabindex="0" aria-label="Transcript">
+          <div id="empty"><div class="empty-symbol" aria-hidden="true">[ <span>· · ·</span> ]</div><h2>Ready when you are.</h2><p>Text appears here as you speak.<br>Or import audio to compare models.</p></div>
           <div id="transcript" hidden><span id="confirmed"></span><span id="draft"></span><span id="caret" hidden>▏</span></div>
         </div>
         <div class="translation" id="translation-block">
-          <div class="translation-head"><span>TRANSLATION → 中文</span><span id="translation-state">HY-MT1.5 · 1.8B · CPU</span></div>
-          <div id="translation-area" class="transcript-area translation-area" tabindex="0" aria-label="中文译文">
-            <p id="translation-empty">说完一句，译文随之而来。</p>
+          <div class="translation-head"><span>TRANSLATION → CHINESE</span><span id="translation-state">HY-MT1.5 · 1.8B · CPU</span></div>
+          <div id="translation-area" class="transcript-area translation-area" tabindex="0" aria-label="Chinese translation">
+            <p id="translation-empty">Finish a sentence and its translation follows.</p>
             <div id="translation" hidden><span id="t-confirmed"></span><span id="t-draft"></span><span id="t-caret" hidden>▏</span></div>
           </div>
         </div>
         <div id="notice" role="alert" hidden></div>
-        <div class="output-actions"><span id="count">0 字符</span><div><button id="copy" disabled>复制文字</button><button id="copy-translation" disabled>复制译文</button><button id="export" disabled>导出记录 ↓</button></div></div>
+        <div class="output-actions"><span id="count">0 chars</span><div><button id="copy" disabled>Copy text</button><button id="copy-translation" disabled>Copy translation</button><button id="export" disabled>Export ↓</button></div></div>
         <div class="metrics">
-          <div><span>FIRST TEXT</span><strong id="first">—<small> ms</small></strong><p>首字等待</p></div>
-          <div><span>DECODE / STEP</span><strong id="decode">—<small> ms</small></strong><p>单步识别耗时</p></div>
-          <div><span>AUDIO BACKLOG</span><strong id="backlog">—<small> ms</small></strong><p>待处理音频</p></div>
-          <div id="lag-metric"><span>TRANSLATION LAG</span><strong id="lag">—<small> ms</small></strong><p>句子确认到译文定稿</p></div>
+          <div><span>FIRST TEXT</span><strong id="first">—<small> ms</small></strong><p>Wait for first text</p></div>
+          <div><span>DECODE / STEP</span><strong id="decode">—<small> ms</small></strong><p>Decode time per step</p></div>
+          <div><span>AUDIO BACKLOG</span><strong id="backlog">—<small> ms</small></strong><p>Audio not yet decoded</p></div>
+          <div id="lag-metric"><span>TRANSLATION LAG</span><strong id="lag">—<small> ms</small></strong><p>Confirmed → settled</p></div>
         </div>
       </section>
     </div>
     <section class="runs" id="runs-section" hidden>
-      <div class="section-title"><span>03 // LISTENING NOTES</span><span class="quiet">本页内保留 · 刷新即清空</span></div>
+      <div class="section-title"><span>03 // LISTENING NOTES</span><span class="quiet">Cleared on reload</span></div>
       <div id="runs"></div>
     </section>
-    <footer><span><b>●</b> <span id="health">正在连接本机服务</span></span><span>16 kHz · MONO · PCM16</span><span>WINDOW 8 s / ROLLBACK 1 TOKEN</span><span>MT HY-MT1.5 1.8B · CPU</span><span>R2D2 // 0.1</span></footer>
-    <p class="footnote">Mac 流式适配 · 共用官方分块与文字续接策略；运行引擎不同，效果由你判断。音频仅留在当前页面内存中。</p>
+    <footer><span><b>●</b> <span id="health">Connecting to local service</span></span><span>16 kHz · MONO · PCM16</span><span>WINDOW 8 s / ROLLBACK 1 TOKEN</span><span>MT HY-MT1.5 1.8B · CPU</span><span>R2D2 // 0.1</span></footer>
+    <p class="footnote">Streaming on Mac · shares the official chunking and text-continuation policy; the engines differ, so judge the results yourself. Audio stays in this page's memory only.</p>
   </main>
 </body>
 </html>

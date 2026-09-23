@@ -40,7 +40,7 @@ def start_llama_server(args, log_name, label, timeout=120):
     binds 0.0.0.0; inference processes never do. Returns (process, client, log)."""
     binary = shutil.which("llama-server")
     if not binary:
-        raise RuntimeError("缺少 llama-server，请运行 brew install llama.cpp")
+        raise RuntimeError("llama-server is missing; run brew install llama.cpp")
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -56,14 +56,14 @@ def start_llama_server(args, log_name, label, timeout=120):
     try:
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise RuntimeError(f"{label} 启动失败，详情见 .runtime/{log_name}")
+                raise RuntimeError(f"{label} failed to start; see .runtime/{log_name}")
             try:
                 if client.get("/health").status_code == 200:
                     return process, client, log
             except httpx.HTTPError:
                 pass
             time.sleep(0.2)
-        raise RuntimeError(f"{label} 加载超时")
+        raise RuntimeError(f"{label} load timed out")
     except BaseException:
         stop_llama_server(process, client, log)
         raise
@@ -100,7 +100,7 @@ class GGUFBackend:
         projector = GGUF_PATH / self.projector_file
         for path in (model, projector, MLX_PATH / "tokenizer.json"):
             if not path.is_file():
-                raise RuntimeError(f"缺少本地模型文件：{path}")
+                raise RuntimeError(f"Missing local model file: {path}")
         self.tokenizer = AutoTokenizer.from_pretrained(MLX_PATH, local_files_only=True)
         self.process, self.client, self.log = start_llama_server(
             [str(model), "--mmproj", str(projector), "-ngl", "99",
@@ -138,7 +138,7 @@ class MLXBackend:
         from mlx_audio.stt.utils import load_model
 
         if not (MLX_PATH / "model.safetensors").is_file():
-            raise RuntimeError(f"缺少本地 MLX 模型：{MLX_PATH}")
+            raise RuntimeError(f"Missing local MLX model: {MLX_PATH}")
         loaded = load_model(str(MLX_PATH), strict=True)
         # mlx-audio's dispatcher wraps __call__(*args, **kwargs); generation's
         # signature check needs the actual Qwen3ASRModel underneath it.

@@ -133,11 +133,11 @@ class Translator:
     def load(self):
         model = MT_PATH / MT_FILE
         if not model.is_file():
-            raise RuntimeError(f"缺少本地翻译模型：{model}")
+            raise RuntimeError(f"Missing local translation model: {model}")
         self.process, self.client, self.log = start_llama_server(
             # -ngl 0 keeps the Metal queue for the recogniser; see module doc.
             [str(model), "-ngl", "0", "-t", str(THREADS), "-c", "2048", "--cache-ram", "0"],
-            "translate-server.log", "翻译模型", timeout=60)
+            "translate-server.log", "Translation model", timeout=60)
         self.translate("Hello.")
 
     def translate(self, text):
@@ -198,7 +198,7 @@ class LiveTranslation:
         try:
             await asyncio.wait_for(asyncio.shield(self._task), timeout)
         except asyncio.TimeoutError:
-            self.error = self.error or "翻译未能在停止后 30 秒内完成，已放弃余下句子"
+            self.error = self.error or "Translation did not finish within 30 s of stopping; the remaining sentences were dropped"
             await self.close()
 
     async def close(self):
@@ -254,7 +254,7 @@ class LiveTranslation:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            self.error = f"翻译出错，已停止翻译（识别继续）：{exc}"
+            self.error = f"Translation failed and has stopped (recognition continues): {exc}"
             await self._emit({"type": "translation_error", "message": self.error})
 
     def _message(self, ms, lag, final=False):

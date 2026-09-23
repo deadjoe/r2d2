@@ -1,13 +1,13 @@
 const $ = id => document.getElementById(id);
 const modelNames = {gguf: 'GGUF / F16', gguf_q8: 'GGUF / Q8_0', gguf_q4: 'GGUF / Q4_K_M', mlx: 'MLX / BF16'};
-const modelNotes = {gguf: '官方 GGUF · F16 主权重 + F16 音频投影',
-  gguf_q8: '官方 GGUF · Q8_0 主权重 + Q8_0 音频投影',
-  gguf_q4: '官方 GGUF · Q4_K_M 主权重 + Q8_0 音频投影', mlx: '自行转换 MLX · BF16'};
+const modelNotes = {gguf: 'Official GGUF · F16 + F16 projector',
+  gguf_q8: 'Official GGUF · Q8_0 + Q8_0 projector',
+  gguf_q4: 'Official GGUF · Q4_K_M + Q8_0 projector', mlx: 'Self-converted MLX · BF16'};
 // Recorded in exports so a result file identifies its weights without consulting the repo.
-const modelDetails = {gguf: '未量化。general.file_type=1 (MOSTLY_F16)；主权重 F16×197 + F32×113，音频投影 F32×248 + F16×150。',
-  gguf_q8: 'general.file_type=7 (MOSTLY_Q8_0)；主权重 Q8_0×197 + F32×113，音频投影 F32×248 + Q8_0×147 + F16×3。',
-  gguf_q4: 'general.file_type=15 (MOSTLY_Q4_K_M)；主权重 Q4_K×168 + Q6_K×29 + F32×113。音频投影沿用 Q8_0，官方未发布 Q4 投影。',
-  mlx: '未量化，自官方 HF 模型转换。safetensors 707 个张量全部 BF16，config.json 无 quantization 字段。'};
+const modelDetails = {gguf: 'Unquantized. general.file_type=1 (MOSTLY_F16); weights F16×197 + F32×113, audio projector F32×248 + F16×150.',
+  gguf_q8: 'general.file_type=7 (MOSTLY_Q8_0); weights Q8_0×197 + F32×113, audio projector F32×248 + Q8_0×147 + F16×3.',
+  gguf_q4: 'general.file_type=15 (MOSTLY_Q4_K_M); weights Q4_K×168 + Q6_K×29 + F32×113. The audio projector stays Q8_0; no official Q4 projector exists.',
+  mlx: 'Unquantized, converted from the official HF model. All 707 safetensors tensors are BF16; config.json has no quantization field.'};
 let selected = 'gguf_q8', active = false, stopping = false, socket = null;
 let micStream = null, audioContext = null, worklet = null, flushResolve = null;
 let frames = [], lastFrames = [], lastSource = '', lastProcessing = 'file', lastCaptureSettings = null;
@@ -51,7 +51,7 @@ function renderTranslation(text, draft = '') {
 function renderText(text, draft = '') {
   $('confirmed').textContent = text; $('draft').textContent = draft;
   $('empty').hidden = !!(text || draft); $('transcript').hidden = !(text || draft);
-  $('count').textContent = `${[...text].length} 字符`;
+  $('count').textContent = `${[...text].length} chars`;
   $('copy').disabled = !text; $('export').disabled = !text && !runs.length;
   const area = $('transcript-area');
   if (area.scrollHeight - area.scrollTop - area.clientHeight < 160) area.scrollTop = area.scrollHeight;
@@ -59,11 +59,11 @@ function renderText(text, draft = '') {
 async function health() {
   try {
     const response = await fetch('/api/status');
-    if (!response.ok) throw new Error('服务不可用');
+    if (!response.ok) throw new Error('Service unavailable');
     const data = await response.json();
-    const labels = {ready: '模型已就绪', loading: '模型加载中', unloaded: '按下开始时加载模型', error: '模型加载失败'};
-    $('health').textContent = `${data.busy ? '识别中' : labels[data.state]} · ${modelNames[data.backend]}`;
-  } catch { $('health').textContent = '本机服务未连接'; }
+    const labels = {ready: 'Model ready', loading: 'Loading model', unloaded: 'Model loads on start', error: 'Model failed to load'};
+    $('health').textContent = `${data.busy ? 'Recognizing' : labels[data.state]} · ${modelNames[data.backend]}`;
+  } catch { $('health').textContent = 'Local service not connected'; }
 }
 
 for (const button of document.querySelectorAll('.engine')) {
@@ -76,7 +76,7 @@ for (const button of document.querySelectorAll('.engine')) {
     $('model-note').textContent = modelNotes[selected];
     $('session-engine').textContent = modelNames[selected];
     // Actual model switch happens on start so browsing controls does not load 4 GB.
-    state('待机'); notice();
+    state('Idle'); notice();
   });
 }
 // Focus mode only restyles the panel in place: the nodes that the stream and
@@ -84,7 +84,7 @@ for (const button of document.querySelectorAll('.engine')) {
 function focusMode(on) {
   document.body.dataset.focus = String(on);
   $('focus').setAttribute('aria-pressed', String(on));
-  $('focus').textContent = on ? '⤡ 还原' : '⤢ 放大';
+  $('focus').textContent = on ? '⤡ Restore' : '⤢ Expand';
   for (const id of ['transcript-area', 'translation-area']) $(id).scrollTop = $(id).scrollHeight;
 }
 $('focus').addEventListener('click', () => focusMode(document.body.dataset.focus !== 'true'));
@@ -95,16 +95,16 @@ $('translate').addEventListener('change', showTranslation);
 $('language').addEventListener('change', showTranslation);
 $('processing').addEventListener('change', () => {
   $('capture-hint').textContent = $('processing').value === 'raw'
-    ? '浏览器降噪、回声消除、自动增益均关闭。'
-    : '降噪、回声消除开启；自动增益关闭。';
+    ? 'Denoise, echo cancel and AGC all off.'
+    : 'Denoise and echo cancel on; AGC off.';
 });
 async function devices() {
   if (!navigator.mediaDevices) return;
   const previous = $('microphone').value;
   const inputs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
-  $('microphone').replaceChildren(new Option('系统默认输入', ''));
+  $('microphone').replaceChildren(new Option('Default input', ''));
   for (const [i, input] of inputs.entries()) {
-    if (input.deviceId && input.deviceId !== 'default') $('microphone').add(new Option(input.label || `麦克风 ${i + 1}`, input.deviceId));
+    if (input.deviceId && input.deviceId !== 'default') $('microphone').add(new Option(input.label || `Microphone ${i + 1}`, input.deviceId));
   }
   if ([...$('microphone').options].some(o => o.value === previous)) $('microphone').value = previous;
 }
@@ -130,7 +130,7 @@ function showLevel(frame) {
 }
 function sendFrame(buffer) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
-  if (socket.bufferedAmount > 320000) { fail('网络发送积压超过 10 秒，录音已停止。'); return; }
+  if (socket.bufferedAmount > 320000) { fail('Network send backlog passed 10 s; recording stopped.'); return; }
   const frame = new Int16Array(buffer);
   frames.push(frame.slice());
   current.samples += frame.length;
@@ -144,21 +144,21 @@ function openSocket() {
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/stream`);
     socket = ws;
     let ready = false, finished = false;
-    const timeout = setTimeout(() => { reject(new Error('模型加载超时')); ws.close(); }, 150000);
+    const timeout = setTimeout(() => { reject(new Error('Model load timed out')); ws.close(); }, 150000);
     ws.onopen = () => ws.send(JSON.stringify({backend: selected, language: $('language').value, context: $('context').value,
       translate: translating()}));
     ws.onmessage = event => {
       let data;
-      try { data = JSON.parse(event.data); } catch { fail('服务返回了无效消息'); return; }
-      if (data.type === 'loading') state('加载模型中…');
+      try { data = JSON.parse(event.data); } catch { fail('The service returned an invalid message'); return; }
+      if (data.type === 'loading') state('Loading model…');
       if (data.type === 'ready') {
-        clearTimeout(timeout); ready = true; state('正在聆听');
+        clearTimeout(timeout); ready = true; state('Listening');
         current.translation = data.translate ? {text: '', updates: [], sentences: []} : null;
-        $('translation-state').textContent = data.translate ? 'HY-MT1.5 · 1.8B · CPU' : current.translate_error ? '翻译不可用' : '未翻译';
+        $('translation-state').textContent = data.translate ? 'HY-MT1.5 · 1.8B · CPU' : current.translate_error ? 'Translation unavailable' : 'Not translating';
         resolve();
       }
       if (data.type === 'translation_error') {
-        current.translate_error = data.message; $('translation-state').textContent = '翻译不可用'; notice(data.message);
+        current.translate_error = data.message; $('translation-state').textContent = 'Translation unavailable'; notice(data.message);
       }
       if (data.type === 'translation' && current.translation) {
         const {type, sentences, ...update} = data;
@@ -175,8 +175,8 @@ function openSocket() {
         if (data.reset) current.resets.push({step: data.step, audio_ms: data.audio_ms, reason: data.reset});
         renderText(data.text, data.draft);
         metric('first', data.first_text_ms); metric('decode', data.decode_ms); metric('backlog', data.backlog_ms);
-        $('detected').textContent = data.language || '识别语言中';
-        if (data.backlog_ms > 1000) notice(`识别落后输入 ${(data.backlog_ms / 1000).toFixed(1)} 秒，正在合并步长追赶${data.hops > 1 ? `（本步合并 ${data.hops} 块）` : ''}。停止录音后会继续处理余下音频。`);
+        $('detected').textContent = data.language || 'Detecting language';
+        if (data.backlog_ms > 1000) notice(`Recognition is ${(data.backlog_ms / 1000).toFixed(1)} s behind the input and merging steps to catch up${data.hops > 1 ? ` (this step merged ${data.hops} chunks)` : ''}. Remaining audio is processed after you stop.`);
         else if (!stopping && !current.translate_error) notice();
       }
       if (data.type === 'done') { finished = true; complete(); }
@@ -185,11 +185,11 @@ function openSocket() {
         if (!ready) reject(new Error(data.message)); else fail(data.message);
       }
     };
-    ws.onerror = () => { if (!ready) { clearTimeout(timeout); reject(new Error('无法连接本机识别服务')); } };
+    ws.onerror = () => { if (!ready) { clearTimeout(timeout); reject(new Error('Cannot reach the local recognition service')); } };
     ws.onclose = () => {
       clearTimeout(timeout);
-      if (!ready) reject(new Error('识别服务在就绪前断开连接'));
-      else if (!finished && active) fail('识别连接已断开；已收到的文字和音频仍可导出或重放。');
+      if (!ready) reject(new Error('The recognition service disconnected before it was ready'));
+      else if (!finished && active) fail('Recognition connection lost; the text and audio received so far can still be exported or replayed.');
     };
   });
 }
@@ -200,11 +200,11 @@ function begin(source, processing) {
     date: new Date().toISOString(), samples: 0, text: '', updates: [], resets: [], note: '',
     translation: null, translate_error: ''};
   renderText(''); renderTranslation(''); showTranslation();
-  $('translation-state').textContent = translating() ? 'HY-MT1.5 · 1.8B · CPU' : '未翻译'; $('timer').textContent = '00:00';
+  $('translation-state').textContent = translating() ? 'HY-MT1.5 · 1.8B · CPU' : 'Not translating'; $('timer').textContent = '00:00';
   $('session-engine').textContent = modelNames[selected];
   $('source-label').textContent = source === 'microphone' ? 'MICROPHONE' : 'AUDIO REPLAY';
   ['first', 'decode', 'backlog', 'lag'].forEach(id => metric(id, null));
-  state('准备输入…');
+  state('Preparing input…');
 }
 async function releaseMic() {
   micStream?.getTracks().forEach(track => track.stop()); micStream = null;
@@ -214,7 +214,7 @@ async function releaseMic() {
 async function record() {
   if (active) return;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    notice('麦克风需要安全页面。请在本机打开 http://localhost:8765，或为局域网访问配置 HTTPS。'); return;
+    notice('The microphone needs a secure page. Open http://localhost:8765 on this machine, or serve HTTPS for LAN access.'); return;
   }
   begin('microphone', $('processing').value);
   $('stop').disabled = true;
@@ -247,14 +247,14 @@ async function record() {
     worklet.connect(mute).connect(audioContext.destination);
     $('stop').disabled = false;
   } catch (error) {
-    const labels = {NotAllowedError: '麦克风权限未获允许。请在浏览器地址栏允许麦克风，然后重试。',
-      NotFoundError: '没有找到可用麦克风。', NotReadableError: '麦克风无法打开，可能正在被其他应用占用。'};
+    const labels = {NotAllowedError: 'Microphone permission denied. Allow it from the browser address bar and try again.',
+      NotFoundError: 'No microphone found.', NotReadableError: 'The microphone cannot be opened; another app may be using it.'};
     fail(labels[error.name] || error.message);
   }
 }
 async function stop() {
   if (!active || stopping) return;
-  stopping = true; replayCancelled = true; $('stop').disabled = true; state('正在完成…');
+  stopping = true; replayCancelled = true; $('stop').disabled = true; state('Finishing…');
   if (worklet) {
     await Promise.race([new Promise(resolve => { flushResolve = resolve; worklet.port.postMessage('stop'); }),
       new Promise(resolve => setTimeout(resolve, 1000))]);
@@ -273,7 +273,7 @@ async function fail(message) {
   await releaseMic();
   keepAudio();
   lock(false); socket?.close(); socket = null;
-  state('已停止'); notice(message);
+  state('Stopped'); notice(message);
   if (current?.text) saveRun('interrupted');
   health();
 }
@@ -287,7 +287,7 @@ async function complete() {
     current.audio_sha256 = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
   keepAudio(); lock(false); stopping = false;
-  state('识别完成'); notice(); saveRun('complete'); health();
+  state('Complete'); notice(); saveRun('complete'); health();
 }
 function saveRun(result) {
   if (!current || runs.some(run => run.id === current.id)) return;
@@ -296,18 +296,18 @@ function saveRun(result) {
   const row = document.createElement('div'); row.className = 'run';
   const meta = document.createElement('div'); meta.className = 'run-meta';
   const title = document.createElement('b'); title.textContent = modelNames[current.backend];
-  const info = document.createElement('div'); info.textContent = `${duration(current.samples)} · ${current.processing === 'browser' ? '浏览器降噪' : current.processing === 'raw' ? '原始输入' : '导入音频'}`;
+  const info = document.createElement('div'); info.textContent = `${duration(current.samples)} · ${current.processing === 'browser' ? 'Browser processing' : current.processing === 'raw' ? 'Raw input' : 'Imported audio'}`;
   meta.append(title, info);
   if (current.resets.length) {
     const resets = document.createElement('div');
-    resets.textContent = `解码器重置 ${current.resets.length} 次`;
+    resets.textContent = `Decoder rebuilt ${current.resets.length}×`;
     resets.title = current.resets.map(r => `${(r.audio_ms / 1000).toFixed(1)}s ${r.reason}`).join('\n');
     meta.append(resets);
   }
   const body = document.createElement('div'), text = document.createElement('p');
-  text.textContent = current.text || '（没有识别到文字）';
+  text.textContent = current.text || '(no text recognized)';
   const note = document.createElement('textarea'); note.rows = 1;
-  note.placeholder = '听感记录：流畅度、漏字、噪声误识别…'; note.setAttribute('aria-label', `${modelNames[current.backend]} 听感记录`);
+  note.placeholder = 'Listening notes: fluency, missed words, noise misfires…'; note.setAttribute('aria-label', `${modelNames[current.backend]} listening notes`);
   const saved = current; note.addEventListener('input', () => saved.note = note.value);
   body.append(text);
   if (current.translation?.text) {
@@ -323,7 +323,7 @@ async function replay(inputFrames, source, processing, captureSettings = null) {
   if (captureSettings) current.captureSettings = captureSettings;
   try {
     await openSocket();
-    $('stop').disabled = false; state('实时重放中');
+    $('stop').disabled = false; state('Replaying');
     const start = performance.now(); let sent = 0;
     current.started = start;
     for (const frame of snapshot) {
@@ -346,7 +346,7 @@ async function importAudio(bytes, name) {
   try {
     decoder = new AudioContext();
     const decoded = await decoder.decodeAudioData(bytes);
-    if (decoded.duration > 300) throw new Error('单段音频上限为 5 分钟');
+    if (decoded.duration > 300) throw new Error('a single clip is limited to 5 minutes');
     const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
     const source = offline.createBufferSource(); source.buffer = decoded;
     source.connect(offline.destination); source.start();
@@ -357,30 +357,30 @@ async function importAudio(bytes, name) {
     }
     await decoder.close(); decoder = null;
     await replay(packets, name, 'file');
-  } catch (error) { notice(`音频无法导入：${error.message}`); }
+  } catch (error) { notice(`Cannot import audio: ${error.message}`); }
   finally { if (decoder) await decoder.close(); }
 }
 $('file').addEventListener('change', async event => {
   const file = event.target.files[0]; event.target.value = '';
   if (!file || active) return;
-  if (file.size > 100 * 1024 * 1024) { notice('请选择小于 100 MB、时长不超过 5 分钟的音频。'); return; }
+  if (file.size > 100 * 1024 * 1024) { notice('Choose audio under 100 MB and no longer than 5 minutes.'); return; }
   await importAudio(await file.arrayBuffer(), file.name);
 });
 $('sample').addEventListener('click', async () => {
   if (active) return;
   try {
     const response = await fetch('/api/sample');
-    if (!response.ok) throw new Error('示例音频不可用');
+    if (!response.ok) throw new Error('Sample audio unavailable');
     await importAudio(await response.arrayBuffer(), 'official-test.wav');
   } catch (error) { notice(error.message); }
 });
 $('copy').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText($('confirmed').textContent); $('copy').textContent = '已复制'; setTimeout(() => $('copy').textContent = '复制文字', 1500); }
-  catch { notice('浏览器未允许复制，请选择文字后手动复制。'); }
+  try { await navigator.clipboard.writeText($('confirmed').textContent); $('copy').textContent = 'Copied'; setTimeout(() => $('copy').textContent = 'Copy text', 1500); }
+  catch { notice('The browser blocked copying; select the text and copy it manually.'); }
 });
 $('copy-translation').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText($('t-confirmed').textContent); $('copy-translation').textContent = '已复制'; setTimeout(() => $('copy-translation').textContent = '复制译文', 1500); }
-  catch { notice('浏览器未允许复制，请选择文字后手动复制。'); }
+  try { await navigator.clipboard.writeText($('t-confirmed').textContent); $('copy-translation').textContent = 'Copied'; setTimeout(() => $('copy-translation').textContent = 'Copy translation', 1500); }
+  catch { notice('The browser blocked copying; select the text and copy it manually.'); }
 });
 $('export').addEventListener('click', () => {
   const entries = current && !runs.some(r => r.id === current.id) ? [current, ...runs] : runs;

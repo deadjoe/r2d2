@@ -166,7 +166,7 @@ class Selection(BaseModel):
 async def select(selection: Selection):
     async with engine.lock:
         if engine.busy or engine.state == "loading":
-            raise HTTPException(409, "正在识别，请先停止当前录音")
+            raise HTTPException(409, "Recognition in progress; stop the current recording first")
         try:
             await engine.load(selection.backend)
         except Exception as exc:
@@ -204,7 +204,7 @@ async def stream_socket(ws: WebSocket):
         options = SessionOptions.model_validate_json(await asyncio.wait_for(ws.receive_text(), 15))
         async with engine.lock:
             if engine.busy:
-                await ws.send_json({"type": "error", "message": "已有录音正在识别，请稍后重试"})
+                await ws.send_json({"type": "error", "message": "Another recording is already being recognized; try again shortly"})
                 await ws.close(code=1013)
                 return
             engine.busy = owned = True
@@ -218,7 +218,7 @@ async def stream_socket(ws: WebSocket):
                 live = LiveTranslation(translation.translate, send)
             except Exception as exc:
                 # Recognition does not depend on translation; say so and carry on.
-                await ws.send_json({"type": "translation_error", "message": f"翻译模型不可用：{exc}"})
+                await ws.send_json({"type": "translation_error", "message": f"Translation model unavailable: {exc}"})
         await ws.send_json({"type": "ready", "backend": options.backend, "sample_rate": RATE,
                             "chunk_ms": 160, "translate": live is not None})
         queue = asyncio.Queue(maxsize=64)
@@ -234,19 +234,19 @@ async def stream_socket(ws: WebSocket):
                     if packet.get("bytes") is not None:
                         data = packet["bytes"]
                         if not data or len(data) % 2 or len(data) > HOP * 2:
-                            raise ValueError("音频必须为最多 160 ms 的 16 kHz 单声道 PCM16")
+                            raise ValueError("Audio must be 16 kHz mono PCM16 packets of at most 160 ms")
                         received += len(data) // 2
                         if received > RATE * 300:
-                            raise ValueError("单次录音上限为 5 分钟，请停止后开启新录音")
+                            raise ValueError("A single recording is limited to 5 minutes; stop and start a new one")
                         try:
                             queue.put_nowait(data)
                         except asyncio.QueueFull:
-                            raise ValueError("识别积压超过 10 秒，已停止；请查看延迟后重试")
+                            raise ValueError("Recognition fell more than 10 s behind and stopped; check the latency and retry")
                     elif packet.get("text") == "stop":
                         await queue.put(None)
                         return
                     else:
-                        raise ValueError("未知的音频消息")
+                        raise ValueError("Unknown audio message")
             except BaseException as exc:
                 # Signal failure without waiting behind a full audio queue.
                 while not queue.empty():
