@@ -208,6 +208,15 @@ def test_overlong_run_without_a_loop_still_rebuilds():
     assert stream.entries == [] and stream.reset_at == stream.processed
 
 
+@pytest.mark.parametrize("output,budget", [("갑을", 4), ("あい", 4), ("甲乙", 4), ("ab", 2)])
+def test_dense_scripts_get_the_doubled_budget(output, budget):
+    backend = Backend(output=output)
+    stream = Stream(backend)
+    stream.feed(np.zeros(FIRST))
+    stream.feed(np.zeros(HOP))
+    assert backend.calls[-1][3] == budget
+
+
 def test_final_step_never_rebuilds():
     stream = Stream(Backend(output="好的。"))
     stream.feed(np.zeros(FIRST))

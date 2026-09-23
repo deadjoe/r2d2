@@ -37,6 +37,11 @@ MAX_BUDGET = 16
 # Upstream SOFT_RESET_SEC on the no-VAD path: a stream that never sees a silence
 # boundary is rebuilt anyway, so accumulated drift cannot feed itself forever.
 SAFETY_RESET = 60 * RATE
+# Scripts dense enough that one token covers about one spoken syllable. Upstream
+# doubles the budget for Chinese only; Japanese passed through its kanji, while
+# Korean fell to the English budget and lagged until the window evicted speech.
+_DENSE = "一-鿿぀-ヿㄱ-ㆎ가-힯ᄀ-ᇿ"
+_DENSE_TAIL = re.compile(rf"[{_DENSE}][^a-zA-Z{_DENSE}]*$")
 
 _EN2ZH_PUNCT = {",": "，", ".": "。", "!": "！", "?": "？", ";": "；", ":": "：", "(": "（", ")": "）"}
 _ZH2EN_PUNCT = {v: k for k, v in _EN2ZH_PUNCT.items()}
@@ -193,10 +198,10 @@ class Stream:
         self.draft = text[len(local_fixed):] if text.startswith(local_fixed) else ""
         if final:
             self.draft = ""
-        # Same adaptive budget as ws_server.py: base 2, Chinese x2, upper bound 4.
-        chinese = bool(re.search(r"[一-鿿][^a-zA-Z一-鿿]*$", self.confirmed))
-        self.budget = 2 if delta or chinese else self.budget + 0.5
-        if chinese:
+        # Same adaptive budget as ws_server.py: base 2, dense script x2, upper bound 4.
+        dense = bool(_DENSE_TAIL.search(self.confirmed))
+        self.budget = 2 if delta or dense else self.budget + 0.5
+        if dense:
             self.budget *= 2
         self.budget = min(4, self.budget)
         self.steps += 1
@@ -217,7 +222,8 @@ class Stream:
         return {"type": "transcript", "text": self.confirmed, "draft": self.draft,
                 "language": self.detected, "audio_ms": round(self.processed / RATE * 1000),
                 "decode_ms": round((time.perf_counter() - begin) * 1000, 1),
-                "step": self.steps, "final": final, "hops": hops, "reset": reset}
+                "step": self.steps, "final": final, "hops": hops, "reset": reset,
+                "timings": getattr(self.backend, "timings", None)}
 
     def finish(self):
         # Deliberate UX fix vs upstream: decode even on an exact hop boundary so

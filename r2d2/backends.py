@@ -125,7 +125,13 @@ class GGUFBackend:
             "stream": False, "stop": ["<|im_end|>", "<|endoftext|>"],
         })
         response.raise_for_status()
-        return response.json()["content"]
+        body = response.json()
+        # llama-server's own split of the step: prompt (audio encode + prefill) vs generation.
+        timings = body.get("timings", {})
+        self.timings = {key: round(timings[key], 1) if key.endswith("_ms") else timings[key]
+                        for key in ("prompt_n", "prompt_ms", "predicted_n", "predicted_ms")
+                        if key in timings}
+        return body["content"]
 
     def close(self):
         stop_llama_server(self.process, self.client, self.log)
