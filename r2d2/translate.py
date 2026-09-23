@@ -143,8 +143,14 @@ class Translator:
     def translate(self, text):
         # Greedy, not the card's sampling: a draft re-translated many times
         # must not change for no reason other than the dice.
+        # cache_prompt reuses the slot's KV for the prefix shared with the last
+        # call: the fixed template, and for a growing draft most of its source.
+        # 30-40 % less time per call on the CPU. Reuse changes the batch split,
+        # so wording can differ slightly from an uncached call; no quality
+        # difference was seen, and a settled sentence identical to its last
+        # draft still reuses that draft's output.
         response = self.client.post("/completion", json={
-            "prompt": PROMPT.format(text), "temperature": 0, "cache_prompt": False,
+            "prompt": PROMPT.format(text), "temperature": 0, "cache_prompt": True,
             "n_predict": min(256, 32 + 2 * len(text)), "stream": False,
         })
         response.raise_for_status()
