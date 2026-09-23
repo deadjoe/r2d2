@@ -148,7 +148,7 @@ class FakeTranslation:
         if self.fail:
             raise RuntimeError("no model")
 
-    async def translate(self, text):
+    async def translate(self, text, abort=None):
         return f"<{text}>"
 
     async def close(self):

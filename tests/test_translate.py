@@ -1,8 +1,9 @@
 import asyncio
+import time
 
 import pytest
 
-from r2d2.translate import LiveTranslation, MAX_SEGMENT, needs_translation, split_sentences, tidy, weight
+from r2d2.translate import DRAFT_IDLE, LiveTranslation, MAX_SEGMENT, needs_translation, split_sentences, tidy, weight
 
 
 @pytest.mark.parametrize("text, sentences, rest", [
@@ -54,7 +55,7 @@ class FakeMT:
     def __init__(self, delay=0.0):
         self.calls, self.delay = [], delay
 
-    async def __call__(self, text):
+    async def __call__(self, text, abort=None):
         self.calls.append(text)
         await asyncio.sleep(self.delay)
         return f"<{text}>"
@@ -124,7 +125,7 @@ def test_a_translator_failure_is_reported_once_and_recognition_is_unaffected():
     async def run():
         messages = []
 
-        async def boom(text):
+        async def boom(text, abort=None):
             raise RuntimeError("down")
 
         async def emit(message):
@@ -159,3 +160,87 @@ def test_settling_drops_a_draft_worded_differently_from_the_settled_sentence():
     messages = asyncio.run(run())
     settled = next(m for m in messages if m["lag_ms"] is not None)
     assert settled["text"] == "<I spent 10 years here.>" and settled["draft"] == ""
+
+
+class AbortableMT(FakeMT):
+    """Takes `delay` seconds per call, returning None early once aborted."""
+
+    def __init__(self, delay):
+        super().__init__(delay)
+        self.aborted = []
+
+    async def __call__(self, text, abort=None):
+        self.calls.append(text)
+        end = time.monotonic() + self.delay
+        while time.monotonic() < end:
+            if abort is not None and abort.is_set():
+                self.aborted.append(text)
+                return None
+            await asyncio.sleep(0.005)
+        return f"<{text}>"
+
+
+def test_a_settling_sentence_aborts_the_draft_in_flight():
+    async def run():
+        mt, messages = AbortableMT(0.3), []
+
+        async def emit(message):
+            messages.append(message)
+
+        live = LiveTranslation(mt, emit)
+        live.update("", "We were talking about")
+        await asyncio.sleep(0.05)
+        live.update("We were talking about it. Then", "")
+        await asyncio.sleep(0.5)
+        return live, mt
+
+    live, mt = asyncio.run(run())
+    assert mt.aborted == ["We were talking about"]
+    # The settled sentence started at once instead of after the 0.3 s draft.
+    assert live.segments[0]["source"] == "We were talking about it."
+    assert live.segments[0]["lag_ms"] < 450
+
+
+def test_a_draft_that_is_the_settling_sentence_is_left_to_finish():
+    async def run():
+        mt, messages = AbortableMT(0.1), []
+
+        async def emit(message):
+            messages.append(message)
+
+        live = LiveTranslation(mt, emit)
+        live.update("Good morning", ".")
+        await asyncio.sleep(0.02)
+        live.update("Good morning. ", "")
+        await asyncio.sleep(0.3)
+        return live, mt
+
+    live, mt = asyncio.run(run())
+    assert mt.aborted == [] and mt.calls == ["Good morning."]
+    assert live.segments[0]["translate_ms"] == 0
+
+
+def test_a_draft_is_retranslated_on_enough_growth_or_once_it_stops_changing():
+    async def run():
+        mt, messages = FakeMT(), []
+
+        async def emit(message):
+            messages.append(message)
+
+        live = LiveTranslation(mt, emit)
+        live.update("", "We were talking")
+        await asyncio.sleep(0.02)
+        live.update("", "We were talking ab")      # +2: too small to re-translate
+        await asyncio.sleep(0.02)
+        small = list(mt.calls)
+        live.update("", "We were talking about it")  # +9 over the translated draft
+        await asyncio.sleep(0.02)
+        grown = list(mt.calls)
+        live.update("", "We were talking about it,")  # +1, then silence
+        await asyncio.sleep(DRAFT_IDLE + 0.1)
+        return small, grown, mt.calls, live
+
+    small, grown, calls, live = asyncio.run(run())
+    assert small == ["We were talking"]
+    assert grown == ["We were talking", "We were talking about it"]
+    assert calls[-1] == "We were talking about it," and live.draft == "<We were talking about it,>"

@@ -106,8 +106,8 @@ class TranslationEngine:
                 raise
             self.translator, self.state = translator, "ready"
 
-    async def translate(self, text):
-        return await self.call(self.translator.translate, text)
+    async def translate(self, text, abort=None):
+        return await self.call(self.translator.translate, text, abort)
 
     def status(self):
         return {"model": MT_FILE, "available": Translator.available(), "state": self.state,

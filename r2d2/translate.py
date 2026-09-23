@@ -15,8 +15,10 @@ recogniser was indistinguishable from running alone. See docs/translation.md.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
+import threading
 import time
 
 from .backends import MODELS, start_llama_server, stop_llama_server
@@ -44,6 +46,13 @@ _HAN = re.compile(r"[一-鿿]")
 _KANA_HANGUL = re.compile(r"[぀-ヿ가-힯ᄀ-ᇿ]")
 _LETTER = re.compile(r"[^\W\d_]")
 _TRAILING_ELLIPSIS = re.compile(r"(?:…+|\.{3,})$")
+# A draft is re-translated once it has grown by this much weighted text since
+# the last translated draft (about four CJK characters or one or two words),
+# or once it has stopped changing for DRAFT_IDLE seconds. Re-translating on
+# every recogniser step kept the CPU translator busy about 75 % of the time,
+# almost all of it on drafts that were replaced before anyone could read them.
+DRAFT_STEP = 8
+DRAFT_IDLE = 0.6
 
 
 def weight(text):
@@ -140,7 +149,10 @@ class Translator:
             "translate-server.log", "Translation model", timeout=60)
         self.translate("Hello.")
 
-    def translate(self, text):
+    def translate(self, text, abort=None):
+        """Chinese for `text`, or None when `abort` (a threading.Event) is set
+        first. Streams, so an abort closes the connection mid-generation and
+        llama-server stops decoding instead of finishing a discarded draft."""
         # Greedy, not the card's sampling: a draft re-translated many times
         # must not change for no reason other than the dice.
         # cache_prompt reuses the slot's KV for the prefix shared with the last
@@ -149,12 +161,21 @@ class Translator:
         # so wording can differ slightly from an uncached call; no quality
         # difference was seen, and a settled sentence identical to its last
         # draft still reuses that draft's output.
-        response = self.client.post("/completion", json={
-            "prompt": PROMPT.format(text), "temperature": 0, "cache_prompt": True,
-            "n_predict": min(256, 32 + 2 * len(text)), "stream": False,
-        })
-        response.raise_for_status()
-        return response.json()["content"]
+        body = {"prompt": PROMPT.format(text), "temperature": 0, "cache_prompt": True,
+                "n_predict": min(256, 32 + 2 * len(text)), "stream": True}
+        parts = []
+        with self.client.stream("POST", "/completion", json=body) as response:
+            response.raise_for_status()
+            for line in response.iter_lines():
+                if abort is not None and abort.is_set():
+                    return None
+                if not line.startswith("data: "):
+                    continue
+                chunk = json.loads(line[6:])
+                parts.append(chunk.get("content", ""))
+                if chunk.get("stop"):
+                    break
+        return "".join(parts)
 
     def close(self):
         stop_llama_server(self.process, self.client, self.log)
@@ -164,11 +185,13 @@ class Translator:
 class LiveTranslation:
     """Schedules translation of one streaming session.
 
-    `translate` is an async str -> str; `emit` an async callback taking the
-    update dict. Settled sentences always go first, in order; the draft is
-    only translated when nothing settled is waiting, and only its newest
-    version, so a slow translator falls behind in draft freshness, never in
-    settled text order.
+    `translate` is an async (text, abort) -> str, returning None once the
+    threading.Event `abort` is set; `emit` an async callback taking the update
+    dict. Settled sentences always go first, in order; the draft is only
+    translated when nothing settled is waiting, and only its newest version,
+    so a slow translator falls behind in draft freshness, never in settled
+    text order. A draft still being translated when a different sentence
+    settles is aborted, so the settled sentence does not wait behind it.
     """
 
     def __init__(self, translate, emit):
@@ -183,6 +206,8 @@ class LiveTranslation:
         # Offsets into the confirmed text where the pending and the shown draft begin.
         self.pending_start = self.draft_start = 0
         self.last_draft = ("", "")  # (source, raw target): reused if that sentence then closes
+        self.pending_since = time.perf_counter()  # when pending_draft last changed
+        self._drafting = None  # (source, abort event) of the draft call in flight
         self.final = False
         self.error = ""
         self._wake = asyncio.Event()
@@ -195,9 +220,14 @@ class LiveTranslation:
             if sentence.strip():
                 self.queue.append((sentence.strip(), now, self.consumed))
             self.consumed += len(sentence)
-        self.pending_draft = "" if final else (rest + draft).strip()
+        pending = "" if final else (rest + draft).strip()
+        if pending != self.pending_draft:
+            self.pending_draft, self.pending_since = pending, now
         self.pending_start = self.consumed
         self.final = self.final or final
+        if self._drafting and any(s.strip() != self._drafting[0] for s in sentences if s.strip()):
+            # The draft in flight is about to be superseded; free the translator.
+            self._drafting[1].set()
         self._wake.set()
 
     async def finish(self, timeout=30):
@@ -208,15 +238,29 @@ class LiveTranslation:
             await self.close()
 
     async def close(self):
+        if self._drafting:
+            self._drafting[1].set()
         self._task.cancel()
         await asyncio.gather(self._task, return_exceptions=True)
 
-    async def _call(self, source):
+    async def _call(self, source, abort=None):
         if not needs_translation(source):
             return source, 0.0
         begin = time.perf_counter()
-        target = await self._translate(source)
+        target = await self._translate(source, abort)
         return target, (time.perf_counter() - begin) * 1000
+
+    def _draft_delay(self):
+        """Seconds until the pending draft is worth translating; 0 for now."""
+        pending, shown = self.pending_draft, self.draft_source
+        if not pending:
+            return 0.0
+        common = 0
+        while common < min(len(pending), len(shown)) and pending[common] == shown[common]:
+            common += 1
+        if weight(pending) - weight(pending[:common]) >= DRAFT_STEP:
+            return 0.0
+        return max(0.0, DRAFT_IDLE - (time.perf_counter() - self.pending_since))
 
     async def _run(self):
         try:
@@ -241,9 +285,19 @@ class LiveTranslation:
                         self.draft, self.draft_source = "", ""
                     await self._emit(self._message(ms, lag))
                     continue
+                delay = None
                 if self.pending_draft != self.draft_source:
+                    delay = self._draft_delay()
+                if delay == 0.0:
                     source, start = self.pending_draft, self.pending_start
-                    target, ms = await self._call(source) if source else ("", 0.0)
+                    abort = threading.Event()
+                    self._drafting = (source, abort)
+                    try:
+                        target, ms = await self._call(source, abort) if source else ("", 0.0)
+                    finally:
+                        self._drafting = None
+                    if target is None:
+                        continue
                     if source:
                         self.last_draft = (source, target)
                     # A sentence that settled while this ran supersedes the draft.
@@ -253,10 +307,15 @@ class LiveTranslation:
                     self.draft_start = start
                     await self._emit(self._message(ms, None))
                     continue
-                if self.final:
+                if self.final and delay is None:
                     return
                 self._wake.clear()
-                await self._wake.wait()
+                try:
+                    # A draft too small to re-translate yet is picked up once it
+                    # stops changing, even if no further update arrives.
+                    await asyncio.wait_for(self._wake.wait(), delay)
+                except asyncio.TimeoutError:
+                    pass
         except asyncio.CancelledError:
             raise
         except Exception as exc:
