@@ -3,19 +3,41 @@
 ## Overview
 
 A local web app for streaming speech recognition with NetEase Youdao's
-Confucius4-R2T2 on Apple Silicon Macs. The browser sends microphone audio to a
+Confucius4-R2T2 on Apple Silicon Macs and on Linux with an NVIDIA GPU. The
+browser sends microphone audio to a
 local server, which transcribes it in 160 ms steps and shows the text as it is
 recognized. Speech can be translated live into Chinese, English, Japanese,
 Korean or Spanish, alongside the transcript, with Tencent's HY-MT1.5-1.8B.
 
-All inference runs on the Mac. The app is also a test bench: the same
+All inference runs on the local machine. The app is also a test bench: the same
 recording can be replayed through different model builds, and each run can be
 exported with per-step timings.
 
 ## Quick start
 
+First install llama.cpp's `llama-server`.
+
+On an Apple Silicon Mac:
+
 ```bash
 brew install llama.cpp
+```
+
+On Linux with an NVIDIA GPU, build it with CUDA (needs the CUDA 12 toolkit,
+CMake and a C++ compiler):
+
+```bash
+git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
+git checkout b29c606e2          # the version this app is verified with
+cmake -B build -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j --target llama-server
+export R2D2_LLAMA_SERVER=$PWD/build/bin/llama-server   # or put it on PATH
+cd -
+```
+
+Then, on either platform, install the app and download the models:
+
+```bash
 uv sync --frozen
 
 # Recognition: GGUF Q8_0 (the default), plus the tokenizer files it uses
@@ -59,15 +81,20 @@ Service control:
 | `PORT` / `HOST` | `8765` / `0.0.0.0` | Web server address |
 | `R2D2_MODELS` | `./models` | Model root |
 | `R2D2_MT_THREADS` | `6` | CPU threads for translation |
+| `R2D2_LLAMA_SERVER` | `llama-server` on `PATH` | llama.cpp server binary |
 
 The page is reachable over the LAN, but browsers only allow the microphone on
-`localhost` or HTTPS pages.
+`localhost` or HTTPS pages. For a remote Linux machine, forward the port and
+open `localhost` instead: `ssh -L 8765:localhost:8765 <host>`.
 
 ## Requirements
 
-- Apple Silicon Mac. Tested on an M1 Max with 64 GB of memory.
+- An Apple Silicon Mac, tested on an M1 Max with 64 GB of memory; or Linux
+  with an NVIDIA GPU, tested on an RTX 4000 Ada (20 GB) under Ubuntu 24.04,
+  CUDA 12.8. Recognition and translation use about 3.2 GB of video memory.
 - Python 3.12 and [uv](https://docs.astral.sh/uv/).
-- llama.cpp from Homebrew. Verified with 0.4.1 (b29c606e2).
+- llama.cpp: from Homebrew on a Mac, built with CUDA on Linux. Verified with
+  0.4.1 (b29c606e2).
 - Chrome or another browser with AudioWorklet support.
 - Disk space for the default setup: about 3.3 GB (Q8_0 recognition,
   translation model, tokenizer files).
@@ -82,8 +109,8 @@ models/
 │   ├── Confucius4-R2T2-Q8_0.gguf + mmproj-Confucius4-R2T2-Q8_0.gguf
 │   ├── Confucius4-R2T2-f16.gguf  + mmproj-Confucius4-R2T2-f16.gguf    (optional)
 │   └── Confucius4-R2T2-Q4_K_M.gguf, uses the Q8_0 mmproj               (optional)
-├── Confucius4-R2T2-MLX-BF16/    tokenizer files (required);
-│                                model.safetensors for MLX (optional, local conversion)
+├── Confucius4-R2T2-MLX-BF16/    tokenizer files (required on every platform);
+│                                model.safetensors for MLX (optional, Mac only, local conversion)
 └── HY-MT1.5-1.8B-GGUF/
     └── HY-MT1.5-1.8B-Q4_K_M.gguf
 ```
@@ -116,8 +143,9 @@ Departures from upstream, each measured on this hardware:
 
 Details are in [docs/streaming.md](docs/streaming.md).
 
-**Engines.** GGUF F16, Q8_0 and Q4_K_M run through llama.cpp on Metal. MLX
-BF16 runs through mlx-audio. Q8_0 is the default: in far-field tests it could
+**Engines.** GGUF F16, Q8_0 and Q4_K_M run through llama.cpp, on Metal on a
+Mac and on CUDA on Linux. MLX BF16 runs through mlx-audio and only on a Mac;
+engines whose files are missing are greyed out on the page. Q8_0 is the default: in far-field tests it could
 not be told apart from F16 and had the best step timing. Q4_K_M was clearly
 worse. See [docs/validation.md](docs/validation.md).
 
@@ -127,8 +155,8 @@ prompt, as upstream's `context` does.
 
 **Live translation.** Into Chinese (the default), English, Japanese, Korean or
 Spanish. HY-MT1.5-1.8B runs in its own llama.cpp
-process on the CPU. On the GPU it slowed recognition past its 160 ms budget;
-on the CPU it had no measurable effect.
+process on the CPU. On a Mac's GPU it slowed recognition past its 160 ms
+budget; on the CPU it had no measurable effect. Linux keeps it on the CPU too.
 
 - A sentence is translated once it is confirmed and closed. That translation
   is final.

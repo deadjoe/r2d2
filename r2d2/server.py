@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .backends import GGUFBackend, MLXBackend, GGUF_PATH, GGUF_VARIANTS, MLX_PATH
+from .backends import GGUFBackend, MLXBackend, GGUF_PATH, GGUF_VARIANTS, MLX_PATH, MLX_SUPPORTED
 from .streaming import Stream, RATE, HOP, WINDOW, MAX_HOPS
 from .translate import LiveTranslation, Translator, MT_FILE
 
@@ -31,7 +31,7 @@ log = logging.getLogger("r2d2")
 
 class Engine:
     def __init__(self):
-        # All Metal work, including model destruction, stays on one worker thread.
+        # All GPU work (Metal or CUDA), including model destruction, stays on one worker thread.
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="inference")
         self.backend = None
         # The chosen default after the far-field comparison; see docs/validation.md.
@@ -77,7 +77,7 @@ class Engine:
                 "models": {**{name: all((GGUF_PATH / file).is_file() for file in files)
                                       and (MLX_PATH / "tokenizer.json").is_file()
                               for name, files in GGUF_VARIANTS.items()},
-                           "mlx": (MLX_PATH / "model.safetensors").is_file()}}
+                           "mlx": MLX_SUPPORTED and (MLX_PATH / "model.safetensors").is_file()}}
 
 
 class TranslationEngine:

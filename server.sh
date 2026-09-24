@@ -33,7 +33,23 @@ llama_pids() { pgrep -f "llama-server.*$ROOT/models" 2>/dev/null || true; }
 
 saved_port() { [[ -f "$PORTFILE" ]] && cat "$PORTFILE" || printf '%s' "$PORT"; }
 
-lan_addrs() { ifconfig 2>/dev/null | awk '/inet /{print $2}' | grep -v '^127\.' || true; }
+# macOS has ifconfig; Linux distributions often ship only iproute2.
+lan_addrs() {
+  if command -v ifconfig >/dev/null 2>&1; then
+    ifconfig 2>/dev/null | awk '/inet /{print $2}' | sed 's/^addr://' | grep -v '^127\.' || true
+  else
+    hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9.]+$' | grep -v '^127\.' || true
+  fi
+}
+
+# Listening sockets on a port, one per line; empty when free.
+port_listeners() {
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | tail -n +2 || true
+  else
+    ss -Hltnp "sport = :$1" 2>/dev/null || true
+  fi
+}
 
 api() { curl -sf --max-time 3 "http://127.0.0.1:$(saved_port)/api/status" 2>/dev/null || true; }
 
@@ -144,9 +160,10 @@ cmd_stop() {
   fi
 
   local port; port=$(saved_port)
-  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+  local listeners; listeners=$(port_listeners "$port")
+  if [[ -n "$listeners" ]]; then
     echo "警告：端口 $port 仍被占用："
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN | tail -n +2
+    printf '%s\n' "$listeners"
     exit 1
   fi
   rm -f "$PIDFILE"
@@ -222,6 +239,7 @@ case "${1:-}" in
   PORT=8766          换端口（默认 8765）
   HOST=127.0.0.1     只监听本机（默认 0.0.0.0，对局域网开放）
   R2D2_MODELS=/path  换模型根目录
+  R2D2_LLAMA_SERVER=/path/llama-server  指定 llama-server（默认在 PATH 中查找）
 USAGE
     exit 1 ;;
 esac

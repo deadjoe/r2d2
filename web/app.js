@@ -70,6 +70,12 @@ async function health() {
     if (!response.ok) throw new Error('Service unavailable');
     const data = await response.json();
     appVersion = data.version; $('version').textContent = `R2D2 // ${data.version}`;
+    // An engine whose files are missing, or MLX off a Mac, cannot be chosen.
+    for (const button of document.querySelectorAll('.engine')) {
+      const missing = data.models[button.dataset.engine] === false;
+      button.disabled = missing;
+      button.title = missing ? 'Not installed on this machine' : '';
+    }
     const mt = data.translation;
     const mtText = !mt.available ? 'MT unavailable' : {ready: 'MT ready', loading: 'MT loading', error: 'MT failed to load', unloaded: 'MT loads on first use'}[mt.state];
     const loaded = modelNames[data.backend];

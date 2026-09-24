@@ -1,13 +1,17 @@
 [project]
 name = "r2d2-listening-room"
 version = "0.1.0"
-description = "Local Confucius4-R2T2 streaming comparison on Apple Silicon"
+description = "Local Confucius4-R2T2 streaming recognition and live translation on Apple Silicon and Linux/CUDA"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "mlx-audio==0.5.5",
+  # MLX runs only on Apple Silicon; elsewhere the GGUF engines are the whole app.
+  "mlx-audio==0.5.5; sys_platform == 'darwin'",
   "fastapi>=0.115,<1",
   "uvicorn[standard]>=0.34,<1",
   "httpx==0.28.1",
+  # The GGUF engine's tokenizer; on macOS mlx-audio pulled these in already.
+  "transformers>=5.17,<6",
+  "numpy>=2,<3",
 ]
 
 [dependency-groups]

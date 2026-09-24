@@ -234,3 +234,16 @@ def test_status_reports_the_project_version(client):
 def test_page_and_scripts_are_revalidated_on_every_load(client, path):
     response = client.get(path)
     assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
+
+
+def test_mlx_is_reported_unavailable_off_a_mac(client, monkeypatch):
+    monkeypatch.setattr(server, "MLX_SUPPORTED", False)
+    assert client.get("/api/status").json()["models"]["mlx"] is False
+
+
+def test_a_missing_llama_server_says_how_to_get_one(monkeypatch):
+    import r2d2.backends as backends
+    monkeypatch.delenv("R2D2_LLAMA_SERVER", raising=False)
+    monkeypatch.setattr(backends.shutil, "which", lambda name: None)
+    with pytest.raises(RuntimeError, match="llama-server is missing"):
+        backends.start_llama_server([], "x.log", "Test")

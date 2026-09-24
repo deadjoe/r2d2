@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import wave
 
@@ -16,7 +17,10 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = Path(os.environ.get("R2D2_MODELS", ROOT / "models"))
+# Holds the tokenizer files every engine needs, plus the MLX weights on a Mac.
 MLX_PATH = MODELS / "Confucius4-R2T2-MLX-BF16"
+# MLX needs Apple Silicon; everywhere else the GGUF engines are the whole app.
+MLX_SUPPORTED = sys.platform == "darwin"
 GGUF_PATH = MODELS / "Confucius4-R2T2-GGUF"
 GGUF_VARIANTS = {
     "gguf": ("Confucius4-R2T2-f16.gguf", "mmproj-Confucius4-R2T2-f16.gguf"),
@@ -38,9 +42,11 @@ def wav_bytes(audio: np.ndarray) -> bytes:
 def start_llama_server(args, log_name, label, timeout=120):
     """Private llama-server child bound to a random loopback port. The web app
     binds 0.0.0.0; inference processes never do. Returns (process, client, log)."""
-    binary = shutil.which("llama-server")
+    binary = os.environ.get("R2D2_LLAMA_SERVER") or shutil.which("llama-server")
     if not binary:
-        raise RuntimeError("llama-server is missing; run brew install llama.cpp")
+        hint = ("run brew install llama.cpp" if sys.platform == "darwin" else
+                "build llama.cpp with -DGGML_CUDA=ON and put llama-server on PATH, or set R2D2_LLAMA_SERVER")
+        raise RuntimeError(f"llama-server is missing; {hint}")
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -141,6 +147,8 @@ class MLXBackend:
     name = "mlx"
 
     def load(self):
+        if not MLX_SUPPORTED:
+            raise RuntimeError("MLX runs only on Apple Silicon Macs; use a GGUF engine")
         from mlx_audio.stt.utils import load_model
 
         if not (MLX_PATH / "model.safetensors").is_file():
