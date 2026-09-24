@@ -29,7 +29,8 @@ RUN git clone --filter=blob:none https://github.com/ggml-org/llama.cpp /src \
 WORKDIR /src
 # Static llama/ggml libraries: one binary plus the CUDA runtime libraries copied below.
 # GGML_NATIVE=OFF: the build machine's CPU says nothing about the one it will run on.
-RUN cmake -B build -DGGML_CUDA=ON -DGGML_NATIVE=OFF \
+# GGML_CUDA_NCCL=OFF: NCCL is for multi-GPU; linking it would pull a 200 MB library in.
+RUN cmake -B build -DGGML_CUDA=ON -DGGML_NATIVE=OFF -DGGML_CUDA_NCCL=OFF \
       -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
       -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF \
       -DLLAMA_BUILD_EXAMPLES=OFF -DCMAKE_BUILD_TYPE=Release \
