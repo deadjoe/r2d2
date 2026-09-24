@@ -1,4 +1,4 @@
-# 官方 streaming 调查与 Mac 适配
+# 官方 streaming 调查与本地适配
 
 调查日期：2026-09-22。阅读了实际 Python 服务、模型流式方法和线上 demo 的浏览器脚本，而不仅是 README。
 
@@ -18,8 +18,8 @@
 
 | 项目 | GGUF | MLX |
 | --- | --- | --- |
-| 模型 | 官方 F16 + F16 音频投影 | 用户自转 BF16 |
-| 计算 | llama.cpp 0.4.1，Metal | mlx-audio 0.5.5，MLX / Metal |
+| 模型 | 官方 F16 / Q8_0（默认）/ Q4_K_M | 用户自转 BF16 |
+| 计算 | llama.cpp 0.4.1，Mac 上 Metal，Linux 上 CUDA | mlx-audio 0.5.5，MLX / Metal，仅 Mac |
 | 输入 | 原始聊天前缀 + WAV，`/completion` 多模态接口 | Whisper 特征提取 + 音频编码 + 拼接 assistant 前缀 |
 | 输出 | 贪心生成 2–4 token 后统一回退 | 同样贪心生成后统一回退 |
 | 调度 | 同一个 `r2d2/streaming.py` | 同一个 `r2d2/streaming.py` |

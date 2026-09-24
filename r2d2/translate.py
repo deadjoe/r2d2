@@ -1,16 +1,18 @@
 """Live translation of the streaming transcript into a chosen language.
 
 Mirrors the transcript's two layers. A sentence the recogniser has confirmed
-and closed is translated once and becomes settled Chinese text that is only
-ever appended to. The open sentence, confirmed tail plus the recogniser's
+and closed is translated once and becomes settled text that is only ever
+appended to. The open sentence, confirmed tail plus the recogniser's
 grey draft, is re-translated latest-wins whenever it changes and shown as a
 grey draft. Word order differs across languages, so a settled translation has
 to wait for its sentence to close; the draft is what keeps the panel moving.
 
-The model is Tencent HY-MT1.5-1.8B (Q4_K_M) in its own llama-server on the
-CPU. Measured on an M1 Max: on Metal, back-to-back translation pushed 63 % of
-Q8 recogniser steps past the 160 ms budget and forced merges; on the CPU the
-recogniser was indistinguishable from running alone. See docs/translation.md.
+The model is Tencent HY-MT1.5-1.8B (Q4_K_M) in its own llama-server, on the
+CPU on a Mac and on the GPU elsewhere (see DEVICE). Measured on an M1 Max: on
+Metal, back-to-back translation pushed 63 % of Q8 recogniser steps past the
+160 ms budget and forced merges; on the CPU the recogniser was
+indistinguishable from running alone. On CUDA the GPU translated 5-10x faster
+without changing recognition. See docs/translation.md.
 """
 from __future__ import annotations
 

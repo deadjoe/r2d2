@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-import json
 import logging
 import os
 from pathlib import Path
