@@ -6,8 +6,14 @@ Korean and Japanese are scored by character (spaces ignored), English by word.
 Both sides are normalised the same way: NFKC, lower case, no punctuation, no
 laughter marks, no unambiguous fillers. Subtitles tidy speech up, so absolute
 numbers overstate the error; compare configurations, not against zero.
+
+A clip with a human Chinese reference (<clip>.zh.json) also gets zh_chrf: the
+chrF score (character n-grams 1-6, beta 2, 0-100, higher is better) of the
+whole live translation against it. Different wording of the same meaning
+scores low too, so like the error rate it ranks runs rather than grades them.
 """
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 import re
@@ -78,6 +84,23 @@ def align(ref, hyp):
             "err": round((sub + dele + ins) / max(n, 1), 4)}, hits
 
 
+def chrf(hyp, ref, order=6, beta=2):
+    """Document-level chrF over Chinese text with punctuation and spaces removed."""
+    clean = lambda t: "".join(c for c in unicodedata.normalize("NFKC", t)
+                              if unicodedata.category(c)[0] not in "PSZC")
+    hyp, ref = clean(hyp), clean(ref)
+    precision = recall = 0.0
+    for n in range(1, order + 1):
+        h, r = (Counter(t[i:i + n] for i in range(len(t) - n + 1)) for t in (hyp, ref))
+        match = sum((h & r).values())
+        precision += match / max(sum(h.values()), 1)
+        recall += match / max(sum(r.values()), 1)
+    precision, recall = precision / order, recall / order
+    if not precision or not recall:
+        return 0.0
+    return round(100 * (1 + beta ** 2) * precision * recall / (beta ** 2 * precision + recall), 1)
+
+
 def pct(values, q):
     values = sorted(values)
     return values[min(len(values) - 1, int(q * len(values)))] if values else None
@@ -137,6 +160,8 @@ def score(path, testset):
             "translate_ms": {"p50": pct(calls, .5), "p90": pct(calls, .9)},
             "lag_ms": {"p50": pct(lags, .5), "p90": pct(lags, .9), "max": max(lags, default=None)},
             "src_chars_p50": pct([len(s["source"]) for s in sentences], .5),
+            "zh_chrf": chrf(final[-1]["text"], "".join(c["text"] for c in json.loads(zh.read_text())))
+                       if (zh := testset / f"{clip}.zh.json").exists() else None,
             "drafts": sum(1 for e in events if e["type"] == "translation" and e["lag_ms"] is None
                           and not e.get("final")),
         }
