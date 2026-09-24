@@ -207,6 +207,8 @@ async def stream_socket(ws: WebSocket):
     owned = False
     receive_task = None
     live = None
+    received = 0  # samples
+    last_packet = time.perf_counter()
     send_lock = asyncio.Lock()
 
     async def send(message):
@@ -238,15 +240,15 @@ async def stream_socket(ws: WebSocket):
                             "chunk_ms": 160, "translate": live is not None,
                             "target": target if live else None})
         queue = asyncio.Queue(maxsize=64)
-        received = 0
 
         async def receive():
-            nonlocal received
+            nonlocal received, last_packet
             try:
                 while True:
                     packet = await asyncio.wait_for(ws.receive(), timeout=30)
                     if packet["type"] == "websocket.disconnect":
-                        raise WebSocketDisconnect()
+                        raise WebSocketDisconnect(packet.get("code", 1000), packet.get("reason"))
+                    last_packet = time.perf_counter()
                     if packet.get("bytes") is not None:
                         data = packet["bytes"]
                         if not data or len(data) % 2 or len(data) > HOP * 2:
@@ -315,8 +317,12 @@ async def stream_socket(ws: WebSocket):
         await send({"type": "done", "backend": options.backend,
                     "audio_ms": round(received / RATE * 1000)})
         await ws.close()
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as exc:
+        # Nothing to tell a client that is gone, but the close code says who closed
+        # it: 1000/1001 the page, 1006 the network path, 1011 a missed keepalive.
+        log.warning("Client disconnected mid-session: code %s%s, %.1f s of audio received, "
+                    "last packet %.1f s before", exc.code, f" ({exc.reason})" if exc.reason else "",
+                    received / RATE, time.perf_counter() - last_packet)
     except asyncio.CancelledError:
         raise
     except Exception as exc:

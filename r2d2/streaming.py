@@ -42,6 +42,10 @@ SAFETY_RESET = 60 * RATE
 # Korean fell to the English budget and lagged until the window evicted speech.
 _DENSE = "一-鿿぀-ヿㄱ-ㆎ가-힯ᄀ-ᇿ"
 _DENSE_TAIL = re.compile(rf"[{_DENSE}][^a-zA-Z{_DENSE}]*$")
+# Scripts written with spaces between words. A rebuilt decoder starts a fresh
+# utterance, whose first word carries no leading space.
+_SPACED_END = re.compile(r"[0-9A-Za-zÀ-ɏ가-힯,.!?;:)\"'%]$")
+_SPACED_START = re.compile(r"^[0-9A-Za-zÀ-ɏ가-힯(\"']")
 
 _EN2ZH_PUNCT = {",": "，", ".": "。", "!": "！", "?": "？", ";": "；", ":": "：", "(": "（", ")": "）"}
 _ZH2EN_PUNCT = {v: k for k, v in _EN2ZH_PUNCT.items()}
@@ -193,11 +197,19 @@ class Stream:
         self.detected = lang or self.detected
         delta = fixed[len(prefix_text):] if fixed.startswith(prefix_text) else ""
         self.entries.append((self.processed, delta))
-        self.confirmed += delta
         local_fixed = prefix_text + delta
         self.draft = text[len(local_fixed):] if text.startswith(local_fixed) else ""
         if final:
             self.draft = ""
+        # After a rebuild the model's context is empty, so the first text of the
+        # new segment would be glued to the last word before it ("chargedChinese").
+        # The model keeps its own text in `entries`; only the transcript gets the space.
+        if not prefix_text and _SPACED_END.search(self.confirmed):
+            if _SPACED_START.search(delta):
+                delta = " " + delta
+            elif not delta and _SPACED_START.search(self.draft):
+                self.draft = " " + self.draft
+        self.confirmed += delta
         # Same adaptive budget as ws_server.py: base 2, dense script x2, upper bound 4.
         dense = bool(_DENSE_TAIL.search(self.confirmed))
         self.budget = 2 if delta or dense else self.budget + 0.5

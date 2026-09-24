@@ -235,3 +235,45 @@ def test_rebuild_does_not_refire_on_the_tail_it_already_handled():
     assert resets, "the loop should be caught at least once"
     # A fresh segment needs the pattern to repeat five times again before firing.
     assert all(b - a >= 4 for a, b in zip(resets, resets[1:]))
+
+
+class Script:
+    """A backend whose next generation is popped from a list."""
+    tokenizer = Tokenizer()
+
+    def __init__(self, outputs):
+        self.outputs = list(outputs)
+
+    def decode(self, audio, prefix, language, context, budget):
+        return self.outputs.pop(0) if self.outputs else ""
+
+
+@pytest.mark.parametrize("before,after,joined", [
+    ("The DOJ charged", "Chinese nationals", "The DOJ charged Chinese nationals"),
+    ("the twenty-first century.", "in that relationship", "the twenty-first century. in that relationship"),
+    ("그래서 우리가", "밥을 먹었어요", "그래서 우리가 밥을 먹었어요"),
+    ("今天天气不错。", "我们出去吧", "今天天气不错。我们出去吧"),
+    ("今日はいい天気", "ですね", "今日はいい天気ですね"),
+])
+def test_text_after_a_rebuild_is_spaced_only_in_spaced_scripts(before, after, joined):
+    # Each output ends in a character the rollback withholds, so it confirms whole.
+    stream = Stream(Script([before + "@", "@", after + "@"]))
+    stream.feed(np.zeros(FIRST))
+    assert stream.confirmed == before
+    stream.reset_at = stream.processed - (SAFETY_RESET + 1)
+    stream.feed(np.zeros(HOP))
+    assert stream.entries == []
+    stream.feed(np.zeros(HOP))
+    assert stream.confirmed == joined
+    # The model's own context keeps its text as generated.
+    assert stream.entries[0][1] == after
+
+
+def test_a_draft_after_a_rebuild_is_spaced_too():
+    # One character: the rollback withholds it all, so it is draft only.
+    stream = Stream(Script(["The DOJ charged@", "@", "C"]))
+    stream.feed(np.zeros(FIRST))
+    stream.reset_at = stream.processed - (SAFETY_RESET + 1)
+    stream.feed(np.zeros(HOP))
+    stream.feed(np.zeros(HOP))
+    assert stream.confirmed == "The DOJ charged" and stream.draft == " C"

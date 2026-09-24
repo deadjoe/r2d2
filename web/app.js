@@ -208,10 +208,15 @@ function openSocket() {
       }
     };
     ws.onerror = () => { if (!ready) { clearTimeout(timeout); reject(new Error('Cannot reach the local recognition service')); } };
-    ws.onclose = () => {
+    ws.onclose = event => {
       clearTimeout(timeout);
       if (!ready) reject(new Error('The recognition service disconnected before it was ready'));
-      else if (!finished && active) fail('Recognition connection lost; the text and audio received so far can still be exported or replayed.');
+      else if (!finished && active) {
+        // 1006: the network path dropped it; 1011: the server missed keepalives.
+        current.close = {code: event.code, reason: event.reason, clean: event.wasClean,
+          at_ms: Math.round(performance.now() - current.started)};
+        fail(`Recognition connection lost (code ${event.code}${event.reason ? `: ${event.reason}` : ''}); the text and audio received so far can still be exported or replayed.`);
+      }
     };
   });
 }

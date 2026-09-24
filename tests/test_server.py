@@ -251,3 +251,19 @@ def test_a_missing_llama_server_says_how_to_get_one(monkeypatch):
 
 def test_status_says_where_translation_runs(client):
     assert client.get("/api/status").json()["translation"]["device"] in ("cpu", "gpu")
+
+
+def test_a_client_that_drops_mid_session_is_logged_with_its_close_code(client, caplog):
+    import time
+    with connect(client) as ws:
+        start(ws)
+        ws.send_bytes(bytes(5120))
+        ws.send_bytes(bytes(5120))
+        ws.receive_json()
+        ws.close(code=1001)
+    for _ in range(100):  # the handler finishes after the close reaches it
+        if not client.get("/api/status").json()["busy"]:
+            break
+        time.sleep(0.02)
+    messages = [r.getMessage() for r in caplog.records if r.name == "r2d2"]
+    assert any("code 1001" in m and "0.3 s of audio" in m for m in messages), messages
