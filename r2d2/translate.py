@@ -27,9 +27,11 @@ from .backends import MODELS, start_llama_server, stop_llama_server
 MT_PATH = MODELS / "HY-MT1.5-1.8B-GGUF"
 MT_FILE = "HY-MT1.5-1.8B-Q4_K_M.gguf"
 THREADS = int(os.environ.get("R2D2_MT_THREADS", "6"))
-# Where HY-MT runs. On a Mac it stays on the CPU: on Metal it pushed the
-# recogniser past its step budget (see module doc). R2D2_MT_DEVICE overrides.
-DEVICE = os.environ.get("R2D2_MT_DEVICE") or "cpu"
+# Where HY-MT runs. On a Mac, the CPU: on Metal it pushed the recogniser past
+# its step budget (see module doc). On CUDA, the GPU: 5-10x faster translation
+# while recognition kept its accuracy and never merged a step (docs/translation.md).
+# R2D2_MT_DEVICE overrides.
+DEVICE = os.environ.get("R2D2_MT_DEVICE") or ("cpu" if sys.platform == "darwin" else "gpu")
 if DEVICE not in ("cpu", "gpu"):
     raise ValueError(f"R2D2_MT_DEVICE must be cpu or gpu, not {DEVICE!r}")
 # The model card's two templates with the model's own chat framing: the

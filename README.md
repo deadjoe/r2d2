@@ -83,7 +83,8 @@ Service control:
 | --- | --- | --- |
 | `PORT` / `HOST` | `8765` / `0.0.0.0` | Web server address |
 | `R2D2_MODELS` | `./models` | Model root |
-| `R2D2_MT_THREADS` | `6` | CPU threads for translation |
+| `R2D2_MT_THREADS` | `6` | CPU threads for translation on the CPU |
+| `R2D2_MT_DEVICE` | `cpu` on a Mac, `gpu` on Linux | Where translation runs |
 | `R2D2_LLAMA_SERVER` | `llama-server` on `PATH` | llama.cpp server binary |
 
 The page is reachable over the LAN, but browsers only allow the microphone on
@@ -95,8 +96,8 @@ open `localhost` instead: `ssh -L 8765:localhost:8765 <host>`.
 - An Apple Silicon Mac, tested on an M1 Max with 64 GB of memory; or Linux
   with an NVIDIA GPU, tested on an RTX 4000 Ada (20 GB) and an RTX 2000 Ada
   (16 GB, 70 W) under Ubuntu 24.04, CUDA 12.8. Both keep up in real time
-  (about 90 ms per 160 ms step). Recognition and translation use about 3.2 GB
-  of video memory.
+  (about 90 ms per 160 ms step). On Linux, recognition and translation
+  together use about 4.3 GB of video memory.
 - Python 3.12 and [uv](https://docs.astral.sh/uv/).
 - llama.cpp: from Homebrew on a Mac, built with CUDA on Linux. Verified with
   0.4.1 (b29c606e2).
@@ -160,8 +161,9 @@ prompt, as upstream's `context` does.
 
 **Live translation.** Into Chinese (the default), English, Japanese, Korean or
 Spanish. HY-MT1.5-1.8B runs in its own llama.cpp
-process on the CPU. On a Mac's GPU it slowed recognition past its 160 ms
-budget; on the CPU it had no measurable effect. Linux keeps it on the CPU too.
+process. On a Mac it runs on the CPU: on the GPU it slowed recognition past
+its 160 ms budget. On Linux it runs on the GPU: translation was 5-10 times
+faster, and recognition kept its accuracy and never fell behind.
 
 - A sentence is translated once it is confirmed and closed. That translation
   is final.
