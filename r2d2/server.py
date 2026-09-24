@@ -139,6 +139,17 @@ app = FastAPI(title="R2D2 // Listening room", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "web"), name="static")
 
 
+@app.middleware("http")
+async def revalidate_page(request, call_next):
+    # Without it the browser may reuse a cached app.js next to a newer
+    # index.html, and the stale script speaks an older session protocol.
+    # no-cache still allows the cache; it just asks first (a 304 when unchanged).
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.get("/")
 async def index():
     return FileResponse(ROOT / "web/index.html")

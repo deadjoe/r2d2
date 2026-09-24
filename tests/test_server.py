@@ -228,3 +228,9 @@ def test_status_reports_the_project_version(client):
     import tomllib
     expected = tomllib.loads((server.ROOT / "pyproject.toml").read_text())["project"]["version"]
     assert client.get("/api/status").json()["version"] == expected
+
+
+@pytest.mark.parametrize("path", ["/", "/static/app.js", "/static/style.css"])
+def test_page_and_scripts_are_revalidated_on_every_load(client, path):
+    response = client.get(path)
+    assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
