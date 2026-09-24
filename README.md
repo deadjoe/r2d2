@@ -29,8 +29,11 @@ CMake and a C++ compiler):
 ```bash
 git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
 git checkout b29c606e2          # the version this app is verified with
-cmake -B build -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j --target llama-server
+export PATH=/usr/local/cuda/bin:$PATH   # the toolkit often leaves nvcc off PATH
+cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=native \
+  -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
+# Each CUDA compile job needs 1-2 GB of RAM; an unbounded -j runs out of memory.
+cmake --build build -j 8 --target llama-server
 export R2D2_LLAMA_SERVER=$PWD/build/bin/llama-server   # or put it on PATH
 cd -
 ```
@@ -90,8 +93,10 @@ open `localhost` instead: `ssh -L 8765:localhost:8765 <host>`.
 ## Requirements
 
 - An Apple Silicon Mac, tested on an M1 Max with 64 GB of memory; or Linux
-  with an NVIDIA GPU, tested on an RTX 4000 Ada (20 GB) under Ubuntu 24.04,
-  CUDA 12.8. Recognition and translation use about 3.2 GB of video memory.
+  with an NVIDIA GPU, tested on an RTX 4000 Ada (20 GB) and an RTX 2000 Ada
+  (16 GB, 70 W) under Ubuntu 24.04, CUDA 12.8. Both keep up in real time
+  (about 90 ms per 160 ms step). Recognition and translation use about 3.2 GB
+  of video memory.
 - Python 3.12 and [uv](https://docs.astral.sh/uv/).
 - llama.cpp: from Homebrew on a Mac, built with CUDA on Linux. Verified with
   0.4.1 (b29c606e2).
