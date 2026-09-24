@@ -60,7 +60,7 @@ async def run(args):
                "max_backlog_ms": max(e["backlog_ms"] for e in updates),
                "wall_seconds": events[-1]["wall_ms"] / 1000}
     translations = [e for e in events if e["type"] == "translation"]
-    if args.translate:
+    if args.translate not in ("off", args.language):
         assert translations and translations[-1]["final"], "translation must settle before done"
         for prev, next_ in zip(translations, translations[1:]):
             assert next_["text"].startswith(prev["text"]), "settled translation must never be rewritten"
@@ -84,7 +84,9 @@ if __name__ == "__main__":
     parser.add_argument("--audio", default="tests/fixtures/official-test.wav")
     parser.add_argument("--language", default="Chinese")
     parser.add_argument("--repeat", type=int, default=1)
-    parser.add_argument("--translate", action="store_true", help="also stream a Chinese translation")
+    parser.add_argument("--translate", nargs="?", const="Chinese", default="off",
+                        choices=["off", "Chinese", "English", "Japanese", "Korean", "Spanish"],
+                        help="also stream a translation (bare flag: Chinese)")
     parser.add_argument("--url", default="ws://localhost:8765/api/stream")
     parser.add_argument("--output", default="artifacts/smoke.json")
     asyncio.run(run(parser.parse_args()))

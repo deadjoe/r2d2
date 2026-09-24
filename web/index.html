@@ -33,8 +33,8 @@
             <select id="language"><option value="Chinese">Chinese</option><option value="English">English</option><option value="Japanese">Japanese</option><option value="Korean">Korean</option><option value="Spanish">Spanish</option><option value="auto">Auto-detect</option></select>
           </div>
           <div class="field"><label for="translate" class="label">Translate <span>LIVE</span></label>
-            <select id="translate"><option value="zh">To Chinese · HY-MT1.5 1.8B</option><option value="off">Off</option></select>
-            <p class="hint" id="translate-hint">Per sentence, grey preview, on CPU.</p>
+            <select id="translate"><option value="Chinese" selected>Chinese</option><option value="English">English</option><option value="Japanese">Japanese</option><option value="Korean">Korean</option><option value="Spanish">Spanish</option><option value="off">Off</option></select>
+            <p class="hint" id="translate-hint">HY-MT1.5 1.8B on CPU. Per sentence, grey preview.</p>
           </div>
           <div class="field"><label for="microphone" class="label">Microphone <span>SOURCE</span></label>
             <select id="microphone"><option value="">Default input</option></select>
@@ -65,8 +65,8 @@
           <div id="transcript" hidden><span id="confirmed"></span><span id="draft"></span><span id="caret" hidden>▏</span></div>
         </div>
         <div class="translation" id="translation-block">
-          <div class="translation-head"><span>TRANSLATION → CHINESE</span><span id="translation-state">HY-MT1.5 · 1.8B · CPU</span></div>
-          <div id="translation-area" class="transcript-area translation-area" tabindex="0" aria-label="Chinese translation">
+          <div class="translation-head"><span id="translation-title">TRANSLATION → CHINESE</span><span id="translation-state">HY-MT1.5 · 1.8B · CPU</span></div>
+          <div id="translation-area" class="transcript-area translation-area" tabindex="0" aria-label="Translation">
             <p id="translation-empty">Finish a sentence and its translation follows.</p>
             <div id="translation" hidden><span id="t-confirmed"></span><span id="t-draft"></span><span id="t-caret" hidden>▏</span></div>
           </div>

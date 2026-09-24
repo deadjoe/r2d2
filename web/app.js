@@ -33,13 +33,17 @@ function metric(id, value) {
   $(id).replaceChildren(document.createTextNode(value == null ? '—' : Math.round(value).toLocaleString()));
   const unit = document.createElement('small'); unit.textContent = ' ms'; $(id).append(unit);
 }
-// Chinese speech needs no translation; the server skips it too.
-function translating() { return $('translate').value === 'zh' && $('language').value !== 'Chinese'; }
+// Translating into the spoken language is recognition only; the server skips it too.
+function translating() { return $('translate').value !== 'off' && $('translate').value !== $('language').value; }
 function showTranslation() {
-  const on = translating();
+  const on = translating(), target = $('translate').value;
   document.body.dataset.translate = String(on);
   $('translation-block').hidden = !on; $('lag-metric').hidden = !on;
   $('copy-translation').hidden = !on;
+  $('translation-title').textContent = `TRANSLATION → ${target.toUpperCase()}`;
+  $('translate-hint').textContent = target === 'off' ? 'Recognition only.'
+    : target === $('language').value ? 'Same as the spoken language: recognition only.'
+    : 'HY-MT1.5 1.8B on CPU. Per sentence, grey preview.';
 }
 function renderTranslation(text, draft = '') {
   $('t-confirmed').textContent = text; $('t-draft').textContent = draft;
@@ -157,14 +161,14 @@ function openSocket() {
     let ready = false, finished = false;
     const timeout = setTimeout(() => { reject(new Error('Model load timed out')); ws.close(); }, 150000);
     ws.onopen = () => ws.send(JSON.stringify({backend: selected, language: $('language').value, context: $('context').value,
-      translate: translating()}));
+      translate: translating() ? $('translate').value : 'off'}));
     ws.onmessage = event => {
       let data;
       try { data = JSON.parse(event.data); } catch { fail('The service returned an invalid message'); return; }
       if (data.type === 'loading') state('Loading model…');
       if (data.type === 'ready') {
         clearTimeout(timeout); ready = true; state('Listening');
-        current.translation = data.translate ? {text: '', updates: [], sentences: []} : null;
+        current.translation = data.translate ? {target: data.target, text: '', updates: [], sentences: []} : null;
         $('translation-state').textContent = data.translate ? 'HY-MT1.5 · 1.8B · CPU' : current.translate_error ? 'Translation unavailable' : 'Not translating';
         resolve();
       }

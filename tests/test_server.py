@@ -141,21 +141,22 @@ def test_hint_accepts_upstreams_full_length(client):
 
 class FakeTranslation:
     def __init__(self, fail=False):
-        self.fail, self.loads = fail, 0
+        self.fail, self.loads, self.targets = fail, 0, []
 
     async def load(self):
         self.loads += 1
         if self.fail:
             raise RuntimeError("no model")
 
-    async def translate(self, text, abort=None):
+    async def translate(self, text, abort=None, target="Chinese"):
+        self.targets.append(target)
         return f"<{text}>"
 
     async def close(self):
         pass
 
 
-def run_session(ws, language, translate=True):
+def run_session(ws, language, translate="Chinese"):
     ws.send_json({"backend": "gguf", "language": language, "translate": translate})
     assert ws.receive_json()["type"] == "loading"
     messages = [ws.receive_json()]
@@ -185,14 +186,33 @@ def test_translation_streams_beside_the_transcript_and_settles_before_done(clien
     assert messages[-1]["type"] == "done"
 
 
-def test_chinese_sessions_never_load_the_translator(client, monkeypatch):
+@pytest.mark.parametrize("language,target", [("Chinese", "Chinese"), ("English", "English"),
+                                             ("Korean", "Korean"), ("Japanese", "off")])
+def test_a_target_equal_to_the_spoken_language_never_loads_the_translator(client, monkeypatch, language, target):
     fake = FakeTranslation()
     monkeypatch.setattr(server, "translation", fake)
     with connect(client) as ws:
-        messages = run_session(ws, "Chinese")
+        messages = run_session(ws, language, target)
     assert fake.loads == 0
     assert not any(m["type"] == "translation" for m in messages)
     assert next(m for m in messages if m["type"] == "ready")["translate"] is False
+
+
+def test_the_chosen_target_reaches_the_translator(client, monkeypatch):
+    fake = FakeTranslation()
+    monkeypatch.setattr(server, "translation", fake)
+    server.engine.backend.output = "Hi. Yo"
+    with connect(client) as ws:
+        messages = run_session(ws, "English", "Japanese")
+    assert next(m for m in messages if m["type"] == "ready")["target"] == "Japanese"
+    assert fake.targets and set(fake.targets) == {"Japanese"}
+
+
+@pytest.mark.parametrize("value", [True, "zh", "French", ""])
+def test_unknown_translation_targets_are_rejected(client, value):
+    with connect(client) as ws:
+        ws.send_json({"backend": "gguf", "language": "English", "translate": value})
+        assert ws.receive_json()["type"] == "error"
 
 
 def test_missing_translator_degrades_to_recognition_only(client, monkeypatch):

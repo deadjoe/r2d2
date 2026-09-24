@@ -108,8 +108,8 @@ class TranslationEngine:
                 raise
             self.translator, self.state = translator, "ready"
 
-    async def translate(self, text, abort=None):
-        return await self.call(self.translator.translate, text, abort)
+    async def translate(self, text, abort=None, target="Chinese"):
+        return await self.call(self.translator.translate, text, abort, target)
 
     def status(self):
         return {"model": MT_FILE, "available": Translator.available(), "state": self.state,
@@ -186,8 +186,9 @@ class SessionOptions(BaseModel):
     )
     # Upstream caps the prompt-borne hint at MAX_SYSTEM_PROMPT_CHARS.
     context: str = Field(default="", max_length=4000)
-    # Live translation into Chinese. Pointless when Chinese is what is spoken.
-    translate: bool = False
+    # Live translation target, or "off". A target equal to the spoken language
+    # means recognition only.
+    translate: str = Field(default="off", pattern="^(off|Chinese|English|Japanese|Korean|Spanish)$")
 
 
 @app.websocket("/api/stream")
@@ -214,15 +215,18 @@ async def stream_socket(ws: WebSocket):
             await engine.load(options.backend)
         session = Stream(engine.backend, None if options.language == "auto" else options.language,
                          options.context)
-        if options.translate and options.language != "Chinese":
+        target = options.translate
+        if target not in ("off", options.language):
             try:
                 await translation.load()
-                live = LiveTranslation(translation.translate, send)
+                live = LiveTranslation(
+                    lambda text, abort=None: translation.translate(text, abort, target), send, target)
             except Exception as exc:
                 # Recognition does not depend on translation; say so and carry on.
                 await ws.send_json({"type": "translation_error", "message": f"Translation model unavailable: {exc}"})
         await ws.send_json({"type": "ready", "backend": options.backend, "sample_rate": RATE,
-                            "chunk_ms": 160, "translate": live is not None})
+                            "chunk_ms": 160, "translate": live is not None,
+                            "target": target if live else None})
         queue = asyncio.Queue(maxsize=64)
         received = 0
 
@@ -285,7 +289,7 @@ async def stream_socket(ws: WebSocket):
                 update["first_text_ms"] = first_text_ms
                 await send(update)
                 if live:
-                    live.update(update["text"], update["draft"])
+                    live.update(update["text"], update["draft"], language=update["language"])
             if stopped:
                 break
         final = await engine.call(session.finish)
@@ -295,7 +299,7 @@ async def stream_socket(ws: WebSocket):
         final["first_text_ms"] = first_text_ms
         await send(final)
         if live:
-            live.update(final["text"], final=True)
+            live.update(final["text"], final=True, language=final["language"])
             await live.finish()
             await send(live.snapshot())
         await send({"type": "done", "backend": options.backend,

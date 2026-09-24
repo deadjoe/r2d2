@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from r2d2.translate import DRAFT_IDLE, LiveTranslation, MAX_SEGMENT, needs_translation, split_sentences, tidy, weight
+from r2d2.translate import DRAFT_IDLE, LiveTranslation, MAX_SEGMENT, needs_translation, prompt, split_sentences, tidy, weight
 
 
 @pytest.mark.parametrize("text, sentences, rest", [
@@ -244,3 +244,41 @@ def test_a_draft_is_retranslated_on_enough_growth_or_once_it_stops_changing():
     assert small == ["We were talking"]
     assert grown == ["We were talking", "We were talking about it"]
     assert calls[-1] == "We were talking about it," and live.draft == "<We were talking about it,>"
+
+
+@pytest.mark.parametrize("text,target,expected", [
+    ("こんにちは", "Japanese", False), ("今天天气很好", "Japanese", True), ("hello", "Japanese", True),
+    ("안녕하세요", "Korean", False), ("こんにちは", "Korean", True),
+    ("hello there", "English", True), ("你好", "English", True), ("...", "English", False),
+])
+def test_text_already_in_the_target_script_is_not_translated(text, target, expected):
+    assert needs_translation(text, target) is expected
+
+
+def test_prompts_follow_the_model_cards_two_templates():
+    assert "将以下文本翻译为中文" in prompt("Hello.")
+    assert "将以下文本翻译为英语" in prompt("你好。", "English")
+    assert "Translate the following segment into Japanese" in prompt("Hello.", "Japanese")
+    assert "Translate the following segment into Spanish" in prompt("안녕하세요.", "Spanish")
+    assert prompt("안녕하세요.", "Spanish").endswith("안녕하세요.<｜hy_Assistant｜>")
+
+
+def test_a_detected_language_equal_to_the_target_passes_through():
+    async def run():
+        calls = []
+
+        async def mt(text, abort=None):
+            calls.append(text)
+            return f"<{text}>"
+
+        async def emit(message):
+            pass
+
+        live = LiveTranslation(mt, emit, "English")
+        live.update("Hello there. ", language="English")
+        live.update("Hello there. ", final=True, language="English")
+        await live.finish()
+        return calls, live.text
+
+    calls, text = asyncio.run(run())
+    assert calls == [] and text == "Hello there."

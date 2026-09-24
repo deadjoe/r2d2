@@ -1,4 +1,4 @@
-"""Live translation of the streaming transcript into Chinese.
+"""Live translation of the streaming transcript into a chosen language.
 
 Mirrors the transcript's two layers. A sentence the recogniser has confirmed
 and closed is translated once and becomes settled Chinese text that is only
@@ -26,12 +26,14 @@ from .backends import MODELS, start_llama_server, stop_llama_server
 MT_PATH = MODELS / "HY-MT1.5-1.8B-GGUF"
 MT_FILE = "HY-MT1.5-1.8B-Q4_K_M.gguf"
 THREADS = int(os.environ.get("R2D2_MT_THREADS", "6"))
-# The model card's XX=>ZH template with the model's own chat framing. Its
-# contextual template was tried and rejected: the 1.8B model translates the
-# supplied context into the output as well.
-PROMPT = ("<｜hy_begin▁of▁sentence｜><｜hy_User｜>"
-          "将以下文本翻译为中文，注意只需要输出翻译后的结果，不要额外解释：\n\n{}"
-          "<｜hy_Assistant｜>")
+# The model card's two templates with the model's own chat framing: the
+# Chinese instruction for ZH<=>XX, naming the target in Chinese, and the
+# English one for every other pair. Its contextual template was tried and
+# rejected: the 1.8B model translates the supplied context into the output too.
+TARGETS = {"Chinese": "中文", "English": "英语", "Japanese": "日语", "Korean": "韩语", "Spanish": "西班牙语"}
+_FRAME = "<｜hy_begin▁of▁sentence｜><｜hy_User｜>{}<｜hy_Assistant｜>"
+_ZH_PAIR = "将以下文本翻译为{}，注意只需要输出翻译后的结果，不要额外解释：\n\n{}"
+_OTHER_PAIR = "Translate the following segment into {}, without additional explanation.\n\n{}"
 
 # Marks that close a sentence immediately. A full stop is ambiguous (3.5, Mr.,
 # "..."), so it closes only once whitespace follows it or the stream ends.
@@ -43,6 +45,8 @@ _SOFT = "，,、；;：:"
 MAX_SEGMENT = 120
 _WIDE = re.compile(r"[⺀-鿿가-힯぀-ヿ＀-￯]")
 _HAN = re.compile(r"[一-鿿]")
+_KANA = re.compile(r"[぀-ヿ]")
+_HANGUL = re.compile(r"[가-힯ᄀ-ᇿ]")
 _KANA_HANGUL = re.compile(r"[぀-ヿ가-힯ᄀ-ᇿ]")
 _LETTER = re.compile(r"[^\W\d_]")
 _TRAILING_ELLIPSIS = re.compile(r"(?:…+|\.{3,})$")
@@ -108,15 +112,32 @@ def _long_cut(text):
     return limit
 
 
-def needs_translation(text):
-    """False for text that is already Chinese (auto mode, code-switching) or
-    has nothing to translate. Kana or Hangul always means translate."""
-    if _KANA_HANGUL.search(text):
-        return True
+def is_chinese(text):
+    """Han makes up most letters and there is no kana or Hangul."""
     letters = _LETTER.findall(text)
-    if not letters:
+    return bool(letters) and not _KANA_HANGUL.search(text) and len(_HAN.findall(text)) * 2 >= len(letters)
+
+
+def needs_translation(text, target="Chinese"):
+    """False for text with nothing to translate, or already written in the
+    target (auto mode, code-switching) as far as its script tells: Chinese by
+    Han without kana or Hangul, Japanese by kana, Korean by Hangul. English
+    and Spanish share a script, so they are left to the detected language."""
+    if not _LETTER.search(text):
         return False
-    return len(_HAN.findall(text)) * 2 < len(letters)
+    if target == "Chinese":
+        return not is_chinese(text)
+    if target == "Japanese":
+        return not _KANA.search(text)
+    if target == "Korean":
+        return not _HANGUL.search(text)
+    return True
+
+
+def prompt(text, target="Chinese"):
+    if target == "Chinese" or is_chinese(text):
+        return _FRAME.format(_ZH_PAIR.format(TARGETS[target], text))
+    return _FRAME.format(_OTHER_PAIR.format(target, text))
 
 
 def tidy(source, target):
@@ -149,8 +170,8 @@ class Translator:
             "translate-server.log", "Translation model", timeout=60)
         self.translate("Hello.")
 
-    def translate(self, text, abort=None):
-        """Chinese for `text`, or None when `abort` (a threading.Event) is set
+    def translate(self, text, abort=None, target="Chinese"):
+        """`text` in `target`, or None when `abort` (a threading.Event) is set
         first. Streams, so an abort closes the connection mid-generation and
         llama-server stops decoding instead of finishing a discarded draft."""
         # Greedy, not the card's sampling: a draft re-translated many times
@@ -161,7 +182,7 @@ class Translator:
         # so wording can differ slightly from an uncached call; no quality
         # difference was seen, and a settled sentence identical to its last
         # draft still reuses that draft's output.
-        body = {"prompt": PROMPT.format(text), "temperature": 0, "cache_prompt": True,
+        body = {"prompt": prompt(text, target), "temperature": 0, "cache_prompt": True,
                 "n_predict": min(256, 32 + 2 * len(text)), "stream": True}
         parts = []
         with self.client.stream("POST", "/completion", json=body) as response:
@@ -194,8 +215,10 @@ class LiveTranslation:
     settles is aborted, so the settled sentence does not wait behind it.
     """
 
-    def __init__(self, translate, emit):
-        self._translate, self._emit = translate, emit
+    def __init__(self, translate, emit, target="Chinese"):
+        self._translate, self._emit, self.target = translate, emit, target
+        # The recogniser's language, when known; text in the target passes through.
+        self.language = ""
         self.consumed = 0  # chars of the transcript's confirmed text already segmented
         self.queue = []    # (source, confirmed_at, start offset) waiting to be settled
         self.text = ""
@@ -213,7 +236,8 @@ class LiveTranslation:
         self._wake = asyncio.Event()
         self._task = asyncio.create_task(self._run())
 
-    def update(self, confirmed, draft="", final=False):
+    def update(self, confirmed, draft="", final=False, language=""):
+        self.language = language or self.language
         sentences, rest = split_sentences(confirmed[self.consumed:], final)
         now = time.perf_counter()
         for sentence in sentences:
@@ -244,7 +268,7 @@ class LiveTranslation:
         await asyncio.gather(self._task, return_exceptions=True)
 
     async def _call(self, source, abort=None):
-        if not needs_translation(source):
+        if self.language == self.target or not needs_translation(source, self.target):
             return source, 0.0
         begin = time.perf_counter()
         target = await self._translate(source, abort)

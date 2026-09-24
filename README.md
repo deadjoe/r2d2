@@ -5,8 +5,8 @@
 A local web app for streaming speech recognition with NetEase Youdao's
 Confucius4-R2T2 on Apple Silicon Macs. The browser sends microphone audio to a
 local server, which transcribes it in 160 ms steps and shows the text as it is
-recognized. Non-Chinese speech can be translated into Chinese live, alongside
-the transcript, with Tencent's HY-MT1.5-1.8B.
+recognized. Speech can be translated live into Chinese, English, Japanese,
+Korean or Spanish, alongside the transcript, with Tencent's HY-MT1.5-1.8B.
 
 All inference runs on the Mac. The app is also a test bench: the same
 recording can be replayed through different model builds, and each run can be
@@ -125,7 +125,8 @@ worse. See [docs/validation.md](docs/validation.md).
 An optional hotword and topic hint (up to 4000 characters) goes into the
 prompt, as upstream's `context` does.
 
-**Live translation into Chinese.** HY-MT1.5-1.8B runs in its own llama.cpp
+**Live translation.** Into Chinese (the default), English, Japanese, Korean or
+Spanish. HY-MT1.5-1.8B runs in its own llama.cpp
 process on the CPU. On the GPU it slowed recognition past its 160 ms budget;
 on the CPU it had no measurable effect.
 
@@ -133,7 +134,8 @@ on the CPU it had no measurable effect.
   is final.
 - The unfinished sentence is re-translated as a grey draft whenever it
   changes.
-- Chinese speech is not translated.
+- A target equal to the spoken language means recognition only. In auto-detect
+  mode, text already in the target passes through untranslated.
 - If the translator fails, recognition continues.
 
 Details and measurements are in [docs/translation.md](docs/translation.md).
