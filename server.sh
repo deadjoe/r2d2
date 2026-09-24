@@ -112,7 +112,7 @@ cmd_start() {
   hr
   echo "  流式策略   160 ms 步进 / 160 ms 前瞻 / ${window:-?} s 窗口 / 回退 1 token"
   echo "  模型就绪   $(printf '%s' "$status" | grep -qE '"gguf": *true' && printf 'GGUF F16 ✓' || printf 'GGUF F16 ✗')   $(printf '%s' "$status" | grep -qE '"gguf_q8": *true' && printf 'GGUF Q8 ✓' || printf 'GGUF Q8 ✗')   $(printf '%s' "$status" | grep -qE '"gguf_q4": *true' && printf 'GGUF Q4 ✓' || printf 'GGUF Q4 ✗')   $(printf '%s' "$status" | grep -qE '"mlx": *true' && printf 'MLX ✓' || printf 'MLX ✗')"
-  echo "  翻译模型   $(printf '%s' "$status" | grep -qE '"available": *true' && printf 'HY-MT1.5 1.8B Q4_K_M ✓（CPU，首次翻译时加载）' || printf 'HY-MT1.5 1.8B ✗（翻译不可用，识别不受影响）')"
+  echo "  翻译模型   $(printf '%s' "$status" | grep -qE '"available": *true' && printf 'Hy-MT2 1.8B Q4_K_M ✓（首次翻译时加载）' || printf 'Hy-MT2 1.8B ✗（翻译不可用，识别不受影响）')"
   echo "             （模型在按下「开始聆听」时才加载，首次需要等待）"
   echo
   echo "  日志       $LOGFILE"
@@ -191,7 +191,7 @@ cmd_status() {
   fi
   local asr mt
   asr=$(pgrep -f "llama-server.*$ROOT/models/Confucius4" 2>/dev/null | tr '\n' ' ' || true)
-  mt=$(pgrep -f "llama-server.*$ROOT/models/HY-MT" 2>/dev/null | tr '\n' ' ' || true)
+  mt=$(pgrep -f "llama-server.*$ROOT/models/Hy-MT" 2>/dev/null | tr '\n' ' ' || true)
   echo "  GGUF 子进程 ${asr:-无（未加载或使用 MLX）}"
   echo "  翻译子进程 ${mt:-无（尚未翻译过）}"
   status=$(api)

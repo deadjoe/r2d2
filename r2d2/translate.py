@@ -7,7 +7,7 @@ grey draft, is re-translated latest-wins whenever it changes and shown as a
 grey draft. Word order differs across languages, so a settled translation has
 to wait for its sentence to close; the draft is what keeps the panel moving.
 
-The model is Tencent HY-MT1.5-1.8B (Q4_K_M) in its own llama-server, on the
+The model is Tencent Hy-MT2-1.8B (Q4_K_M) in its own llama-server, on the
 CPU on a Mac and on the GPU elsewhere (see DEVICE). Measured on an M1 Max: on
 Metal, back-to-back translation pushed 63 % of Q8 recogniser steps past the
 160 ms budget and forced merges; on the CPU the recogniser was
@@ -26,8 +26,8 @@ import time
 
 from .backends import MODELS, start_llama_server, stop_llama_server
 
-MT_PATH = MODELS / "HY-MT1.5-1.8B-GGUF"
-MT_FILE = "HY-MT1.5-1.8B-Q4_K_M.gguf"
+MT_PATH = MODELS / "Hy-MT2-1.8B-GGUF"
+MT_FILE = "Hy-MT2-1.8B-Q4_K_M.gguf"
 THREADS = int(os.environ.get("R2D2_MT_THREADS", "6"))
 # Where HY-MT runs. On a Mac, the CPU: on Metal it pushed the recogniser past
 # its step budget (see module doc). On CUDA, the GPU: 5-10x faster translation
@@ -38,12 +38,13 @@ if DEVICE not in ("cpu", "gpu"):
     raise ValueError(f"R2D2_MT_DEVICE must be cpu or gpu, not {DEVICE!r}")
 # The model card's two templates with the model's own chat framing: the
 # Chinese instruction for ZH<=>XX, naming the target in Chinese, and the
-# English one for every other pair. Its contextual template was tried and
-# rejected: the 1.8B model translates the supplied context into the output too.
+# English one for every other pair. Its contextual template was tried with
+# HY-MT1.5 and rejected: it translated the supplied context into the output too.
 TARGETS = {"Chinese": "中文", "English": "英语", "Japanese": "日语", "Korean": "韩语", "Spanish": "西班牙语"}
 _FRAME = "<｜hy_begin▁of▁sentence｜><｜hy_User｜>{}<｜hy_Assistant｜>"
 _ZH_PAIR = "将以下文本翻译为{}，注意只需要输出翻译后的结果，不要额外解释：\n\n{}"
-_OTHER_PAIR = "Translate the following segment into {}, without additional explanation.\n\n{}"
+_OTHER_PAIR = ("Translate the following text into {}. Note that you should only output the "
+               "translated result without any additional explanation:\n\n{}")
 
 # Marks that close a sentence immediately. A full stop is ambiguous (3.5, Mr.,
 # "..."), so it closes only once whitespace follows it or the stream ends.
@@ -60,6 +61,12 @@ _HANGUL = re.compile(r"[가-힯ᄀ-ᇿ]")
 _KANA_HANGUL = re.compile(r"[぀-ヿ가-힯ᄀ-ᇿ]")
 _LETTER = re.compile(r"[^\W\d_]")
 _TRAILING_ELLIPSIS = re.compile(r"(?:…+|\.{3,})$")
+# A sentence-final mark, ignoring closing quotes and brackets after it.
+_END_MARK = re.compile(r"([。！？!?.…])[\"'”’」』）)】\]>]*$")
+# Targets written with full-width marks; the rest take ASCII ones.
+_WIDE_MARKS = {"Chinese", "Japanese"}
+# Targets that put a space between sentences.
+_SPACED = {"English", "Spanish"}
 # A draft is re-translated once it has grown by this much weighted text since
 # the last translated draft (about four CJK characters or one or two words),
 # or once it has stopped changing for DRAFT_IDLE seconds. Re-translating on
@@ -150,13 +157,30 @@ def prompt(text, target="Chinese"):
     return _FRAME.format(_OTHER_PAIR.format(target, text))
 
 
-def tidy(source, target):
+def tidy(source, target, language="Chinese"):
     target = target.strip()
     # The model marks an unfinished fragment with "……"; a sentence cut for
     # length or a draft is unfinished by construction, and the caret says so.
-    if not _TRAILING_ELLIPSIS.search(source.strip()):
-        target = _TRAILING_ELLIPSIS.sub("", target).rstrip()
+    if _TRAILING_ELLIPSIS.search(source.strip()):
+        return target
+    target = _TRAILING_ELLIPSIS.sub("", target).rstrip()
+    # Hy-MT2 often drops the closing mark of a short sentence; settled
+    # sentences are concatenated, so without it they run together.
+    end = _END_MARK.search(source.strip())
+    if target and end and not _END_MARK.search(target):
+        mark = {"。": ".", "！": "!", "？": "?"}.get(end.group(1), end.group(1))
+        if language in _WIDE_MARKS:
+            mark = {".": "。", "!": "！", "?": "？"}[mark]
+        target += mark
     return target
+
+
+def spaced(before, piece, language):
+    """`piece` to append after `before`, with a space between sentences in
+    languages that put one there."""
+    if language in _SPACED and before and piece and not before[-1].isspace():
+        return " " + piece
+    return piece
 
 
 class Translator:
@@ -308,8 +332,8 @@ class LiveTranslation:
                         target, ms = self.last_draft[1], 0.0
                     else:
                         target, ms = await self._call(source)
-                    target = tidy(source, target)
-                    self.text += target
+                    target = tidy(source, target, self.target)
+                    self.text += spaced(self.text, target, self.target)
                     lag = (time.perf_counter() - confirmed_at) * 1000
                     self.segments.append({"source": source, "target": target,
                                           "translate_ms": round(ms, 1), "lag_ms": round(lag)})
@@ -338,7 +362,8 @@ class LiveTranslation:
                     # A sentence that settled while this ran supersedes the draft.
                     if self.queue:
                         continue
-                    self.draft, self.draft_source = tidy(source, target), source
+                    self.draft = spaced(self.text, tidy(source, target, self.target), self.target)
+                    self.draft_source = source
                     self.draft_start = start
                     await self._emit(self._message(ms, None))
                     continue

@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from r2d2.translate import DRAFT_IDLE, LiveTranslation, MAX_SEGMENT, needs_translation, prompt, split_sentences, tidy, weight
+from r2d2.translate import DRAFT_IDLE, LiveTranslation, MAX_SEGMENT, needs_translation, prompt, spaced, split_sentences, tidy, weight
 
 
 @pytest.mark.parametrize("text, sentences, rest", [
@@ -258,8 +258,8 @@ def test_text_already_in_the_target_script_is_not_translated(text, target, expec
 def test_prompts_follow_the_model_cards_two_templates():
     assert "将以下文本翻译为中文" in prompt("Hello.")
     assert "将以下文本翻译为英语" in prompt("你好。", "English")
-    assert "Translate the following segment into Japanese" in prompt("Hello.", "Japanese")
-    assert "Translate the following segment into Spanish" in prompt("안녕하세요.", "Spanish")
+    assert "Translate the following text into Japanese" in prompt("Hello.", "Japanese")
+    assert "Translate the following text into Spanish" in prompt("안녕하세요.", "Spanish")
     assert prompt("안녕하세요.", "Spanish").endswith("안녕하세요.<｜hy_Assistant｜>")
 
 
@@ -282,3 +282,22 @@ def test_a_detected_language_equal_to_the_target_passes_through():
 
     calls, text = asyncio.run(run())
     assert calls == [] and text == "Hello there."
+
+
+def test_tidy_restores_a_dropped_closing_mark_in_the_target_script():
+    assert tidy("너무 감동이에요.", "太感动了") == "太感动了。"
+    assert tidy("그래요?", "是吗") == "是吗？"
+    assert tidy("시작!", "Start", "English") == "Start!"
+    assert tidy("今天好冷。", "今日は寒い", "Japanese") == "今日は寒い。"
+    assert tidy("今天好冷。", "It is cold", "English") == "It is cold."
+    assert tidy("그래요?", "是吗？") == "是吗？"
+    assert tidy("「行こう」と言った。", "他说“走吧”。") == "他说“走吧”。"
+    # A sentence cut for length has no mark to restore.
+    assert tidy("그래서 우리가", "所以我们") == "所以我们"
+
+
+def test_sentences_in_spaced_languages_are_joined_with_a_space():
+    assert spaced("Hello there.", "How are you?", "English") == " How are you?"
+    assert spaced("", "Hola.", "Spanish") == "Hola."
+    assert spaced("你好。", "今天好冷。", "Chinese") == "今天好冷。"
+    assert spaced("Hello there. ", "Fine.", "English") == "Fine."

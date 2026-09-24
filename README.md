@@ -1,7 +1,7 @@
 # R2D2 // Listening Room
 
 A local web app for streaming speech recognition with NetEase Youdao's
-Confucius4-R2T2, with optional live translation by Tencent's HY-MT1.5-1.8B.
+Confucius4-R2T2, with optional live translation by Tencent's Hy-MT2-1.8B.
 The browser streams microphone audio to a local server, which transcribes it
 every 160 ms. Everything runs on your machine: an Apple Silicon Mac, or Linux
 with an NVIDIA GPU.
@@ -56,8 +56,8 @@ uv run hf download netease-youdao/Confucius4-R2T2 --exclude "*.safetensors" \
   --local-dir models/Confucius4-R2T2-MLX-BF16
 
 # Translation
-uv run hf download tencent/HY-MT1.5-1.8B-GGUF \
-  HY-MT1.5-1.8B-Q4_K_M.gguf License.txt --local-dir models/HY-MT1.5-1.8B-GGUF
+uv run hf download tencent/Hy-MT2-1.8B-GGUF \
+  Hy-MT2-1.8B-Q4_K_M.gguf LICENSE.txt --local-dir models/Hy-MT2-1.8B-GGUF
 ```
 
 Pinned revisions and SHA-256 of all weights are in
@@ -114,7 +114,7 @@ with an optional hotword and topic hint.
 **Translation.** Into Chinese (default), English, Japanese, Korean or Spanish.
 A closed sentence is translated once and never changes; the open sentence is
 re-translated as a grey draft. A target equal to the spoken language means
-recognition only. On a Mac, HY-MT runs on the CPU because on the GPU it
+recognition only. On a Mac, Hy-MT2 runs on the CPU because on the GPU it
 slowed recognition; on Linux it runs on the GPU, 5-10 times faster without
 affecting recognition accuracy. See [docs/translation.md](docs/translation.md).
 
@@ -131,7 +131,7 @@ affecting recognition accuracy. See [docs/translation.md](docs/translation.md).
 | --- | --- | --- |
 | [Confucius4-R2T2](https://huggingface.co/netease-youdao/Confucius4-R2T2) ([GGUF](https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF)), NetEase Youdao | Speech recognition model and tokenizer | NetEase model license, shipped with the weights |
 | [Confucius4-R2T2 source](https://github.com/netease-youdao/Confucius4-R2T2) | Streaming policy adapted in `r2d2/streaming.py`; sample audio in `tests/fixtures/` | Apache-2.0 |
-| [HY-MT1.5-1.8B-GGUF](https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF), Tencent | Translation model | Tencent HY Community License (excludes the EU, UK and South Korea) |
+| [Hy-MT2-1.8B-GGUF](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF), Tencent | Translation model | Apache-2.0 |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF inference (`llama-server`) | MIT |
 | [mlx-audio](https://github.com/Blaizzy/mlx-audio) / [MLX](https://github.com/ml-explore/mlx) | MLX inference | MIT |
 | [Transformers](https://github.com/huggingface/transformers) | Tokenizer | Apache-2.0 |

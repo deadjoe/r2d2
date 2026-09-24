@@ -80,7 +80,7 @@ class Engine:
 
 
 class TranslationEngine:
-    """HY-MT on the CPU, loaded on first use and kept: about 1.2 GB of RAM and no
+    """Hy-MT2 on the CPU, loaded on first use and kept: about 1.2 GB of RAM and no
     GPU. Its own worker thread, so a translation never queues behind a decode."""
 
     def __init__(self):
