@@ -202,3 +202,9 @@ def test_missing_translator_degrades_to_recognition_only(client, monkeypatch):
     types = [m["type"] for m in messages]
     assert types[0] == "translation_error" and "ready" in types and types[-1] == "done"
     assert "translation" not in types
+
+
+def test_status_reports_the_project_version(client):
+    import tomllib
+    expected = tomllib.loads((server.ROOT / "pyproject.toml").read_text())["project"]["version"]
+    assert client.get("/api/status").json()["version"] == expected

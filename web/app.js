@@ -56,14 +56,25 @@ function renderText(text, draft = '') {
   const area = $('transcript-area');
   if (area.scrollHeight - area.scrollTop - area.clientHeight < 160) area.scrollTop = area.scrollHeight;
 }
+let appVersion = '';
+// Service line: the recognition model the next session will use (the one selected
+// here, not merely whatever the server has loaded) and the translation model.
 async function health() {
+  const show = (dot, text) => { $('health-dot').dataset.state = dot; $('health').textContent = text; };
   try {
     const response = await fetch('/api/status');
     if (!response.ok) throw new Error('Service unavailable');
     const data = await response.json();
-    const labels = {ready: 'Model ready', loading: 'Loading model', unloaded: 'Model loads on start', error: 'Model failed to load'};
-    $('health').textContent = `${data.busy ? 'Recognizing' : labels[data.state]} · ${modelNames[data.backend]}`;
-  } catch { $('health').textContent = 'Local service not connected'; }
+    appVersion = data.version; $('version').textContent = `R2D2 // ${data.version}`;
+    const mt = data.translation;
+    const mtText = !mt.available ? 'MT unavailable' : {ready: 'MT ready', loading: 'MT loading', error: 'MT failed to load', unloaded: 'MT loads on first use'}[mt.state];
+    const loaded = modelNames[data.backend];
+    if (data.busy) show('busy', `Recognizing · ${loaded} · ${mtText}`);
+    else if (data.state === 'loading') show('busy', `Loading ${loaded} · ${mtText}`);
+    else if (data.state === 'error' && data.backend === selected) show('error', `${loaded} failed to load · ${mtText}`);
+    else if (data.state === 'ready' && data.backend === selected) show(mt.state === 'error' ? 'error' : 'ready', `${loaded} ready · ${mtText}`);
+    else show(mt.state === 'error' ? 'error' : 'ready', `${modelNames[selected]} loads on start · ${mtText}`);
+  } catch { show('offline', 'Local service not connected'); }
 }
 
 for (const button of document.querySelectorAll('.engine')) {
@@ -76,7 +87,7 @@ for (const button of document.querySelectorAll('.engine')) {
     $('model-note').textContent = modelNotes[selected];
     $('session-engine').textContent = modelNames[selected];
     // Actual model switch happens on start so browsing controls does not load 4 GB.
-    state('Idle'); notice();
+    state('Idle'); notice(); health();
   });
 }
 // Focus mode only restyles the panel in place: the nodes that the stream and
@@ -384,7 +395,7 @@ $('copy-translation').addEventListener('click', async () => {
 });
 $('export').addEventListener('click', () => {
   const entries = current && !runs.some(r => r.id === current.id) ? [current, ...runs] : runs;
-  const blob = new Blob([JSON.stringify({app: 'R2D2', version: '0.1', policy: '160ms hop / 160ms lookahead / 8s window / 1 token rollback / merges up to 3 hops when behind',
+  const blob = new Blob([JSON.stringify({app: 'R2D2', version: appVersion, policy: '160ms hop / 160ms lookahead / 8s window / 1 token rollback / merges up to 3 hops when behind',
     translation_policy: 'HY-MT1.5-1.8B Q4_K_M on CPU / greedy / settle per closed sentence / latest-wins draft', runs: entries}, null, 2)], {type: 'application/json'});
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
   link.download = `r2d2-${new Date().toISOString().replaceAll(':', '-')}.json`; link.click();

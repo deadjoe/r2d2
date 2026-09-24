@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 import time
+import tomllib
 
 # Both adapters resolve local files only. No hub fallback during normal operation.
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -24,6 +25,7 @@ from .streaming import Stream, RATE, HOP, WINDOW, MAX_HOPS
 from .translate import LiveTranslation, Translator, MT_FILE
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
 log = logging.getLogger("r2d2")
 
 
@@ -150,7 +152,7 @@ async def favicon():
 
 @app.get("/api/status")
 async def status():
-    return {**engine.status(), "translation": translation.status()}
+    return {**engine.status(), "translation": translation.status(), "version": VERSION}
 
 
 @app.get("/api/sample")
