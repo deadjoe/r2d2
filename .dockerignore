@@ -1,0 +1,15 @@
+# Allow-list: only what deploy/docker/Dockerfile copies. Recordings (results/),
+# experiment data (artifacts/), weights (models/) and local state never reach the build.
+*
+!pyproject.toml
+!uv.lock
+!r2d2/
+!web/
+!tests/fixtures/official-test.wav
+!models-manifest.json
+!LICENSE
+!README.md
+!third_party/NOTICE.md
+!deploy/docker/
+**/__pycache__
+**/.DS_Store

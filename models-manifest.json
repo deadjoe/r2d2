@@ -1,15 +1,42 @@
 {
   "verified_date": "2026-09-22",
+  "sets": {
+    "default": [
+      "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-Q8_0.gguf",
+      "models/Confucius4-R2T2-GGUF/mmproj-Confucius4-R2T2-Q8_0.gguf",
+      "models/Hy-MT2-1.8B-GGUF/Hy-MT2-1.8B-Q4_K_M.gguf",
+      "models/Confucius4-R2T2-MLX-BF16/added_tokens.json",
+      "models/Confucius4-R2T2-MLX-BF16/chat_template.json",
+      "models/Confucius4-R2T2-MLX-BF16/merges.txt",
+      "models/Confucius4-R2T2-MLX-BF16/special_tokens_map.json",
+      "models/Confucius4-R2T2-MLX-BF16/tokenizer.json",
+      "models/Confucius4-R2T2-MLX-BF16/tokenizer_config.json",
+      "models/Confucius4-R2T2-MLX-BF16/vocab.json"
+    ],
+    "q4": [
+      "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-Q4_K_M.gguf"
+    ],
+    "f16": [
+      "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-f16.gguf",
+      "models/Confucius4-R2T2-GGUF/mmproj-Confucius4-R2T2-f16.gguf"
+    ]
+  },
   "files": [
     {
       "path": "models/Confucius4-R2T2-GGUF/Confucius4-R2T2-f16.gguf",
       "sha256": "4fa26b8f2d6db9122752d3e28694c26083bad95f6263d2f7619c7f98f2480b97",
-      "bytes": 3447345088
+      "bytes": 3447345088,
+      "source_repo": "netease-youdao/Confucius4-R2T2-GGUF",
+      "source_revision": "86ff0251cb9f456b63aeef5f80137f104e22869a",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-f16.gguf"
     },
     {
       "path": "models/Confucius4-R2T2-GGUF/mmproj-Confucius4-R2T2-f16.gguf",
       "sha256": "0057b28b8814e431a28e3d1002343eef2d1676bbf8b0625351ae4550ac4e595d",
-      "bytes": 641773984
+      "bytes": 641773984,
+      "source_repo": "netease-youdao/Confucius4-R2T2-GGUF",
+      "source_revision": "86ff0251cb9f456b63aeef5f80137f104e22869a",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/mmproj-Confucius4-R2T2-f16.gguf"
     },
     {
       "path": "models/Confucius4-R2T2-MLX-BF16/model.safetensors",
@@ -50,6 +77,69 @@
       "source_repo": "tencent/Hy-MT2-1.8B-GGUF",
       "source_revision": "a0c709d9fac510f2c807aa3af52872340dc37a4a",
       "source_url": "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/a0c709d9fac510f2c807aa3af52872340dc37a4a/Hy-MT2-1.8B-Q4_K_M.gguf",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/added_tokens.json",
+      "sha256": "de40784677cbd1843cabe5fbee078c7e042cd0b62155f0810af5a13842e5722a",
+      "bytes": 1566,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/added_tokens.json",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/chat_template.json",
+      "sha256": "75a8cfca24f00de72d796fbfed6858fc9614ef3dabd8696684cc3bc03a9c58ff",
+      "bytes": 1161,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/chat_template.json",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/merges.txt",
+      "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+      "bytes": 1671853,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/merges.txt",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/special_tokens_map.json",
+      "sha256": "7b376c510ccf9d88bb9bbee41dfc5052122e16e0dec1124a8d8983c59259a9f3",
+      "bytes": 1008,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/special_tokens_map.json",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/tokenizer.json",
+      "sha256": "0499602714160467f2d68b910651d6216020689f1e016be87a2d0019ee3baeab",
+      "bytes": 11429499,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/tokenizer.json",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/tokenizer_config.json",
+      "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c",
+      "bytes": 12487,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/tokenizer_config.json",
+      "verified_date": "2026-09-25"
+    },
+    {
+      "path": "models/Confucius4-R2T2-MLX-BF16/vocab.json",
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "bytes": 2776833,
+      "source_repo": "netease-youdao/Confucius4-R2T2",
+      "source_revision": "185ce639118ad1362d049ca0d8ed04b6ec5cd6c9",
+      "source_url": "https://huggingface.co/netease-youdao/Confucius4-R2T2/resolve/185ce639118ad1362d049ca0d8ed04b6ec5cd6c9/vocab.json",
       "verified_date": "2026-09-25"
     }
   ]

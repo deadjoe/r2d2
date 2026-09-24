@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import logging
 import os
 from pathlib import Path
+import re
 import time
 import tomllib
 
@@ -19,6 +20,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .access import AccessGate
 from .backends import GGUFBackend, MLXBackend, GGUF_PATH, GGUF_VARIANTS, MLX_PATH, MLX_SUPPORTED
 from .streaming import Stream, RATE, HOP, WINDOW, MAX_HOPS
 from .translate import LiveTranslation, Translator, MT_FILE, DEVICE as MT_DEVICE
@@ -136,6 +138,12 @@ async def lifespan(app):
 
 app = FastAPI(title="R2D2 // Listening room", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "web"), name="static")
+# Set on a machine reachable from outside, such as a cloud GPU behind a public proxy.
+ACCESS_KEY = os.environ.get("R2D2_ACCESS_KEY", "")
+if ACCESS_KEY:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", ACCESS_KEY):
+        raise ValueError("R2D2_ACCESS_KEY must be 16-128 characters of A-Z, a-z, 0-9, _ or -")
+    app.add_middleware(AccessGate, key=ACCESS_KEY)
 
 
 @app.middleware("http")
