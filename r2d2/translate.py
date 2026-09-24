@@ -18,6 +18,7 @@ import asyncio
 import json
 import os
 import re
+import sys
 import threading
 import time
 
@@ -26,6 +27,11 @@ from .backends import MODELS, start_llama_server, stop_llama_server
 MT_PATH = MODELS / "HY-MT1.5-1.8B-GGUF"
 MT_FILE = "HY-MT1.5-1.8B-Q4_K_M.gguf"
 THREADS = int(os.environ.get("R2D2_MT_THREADS", "6"))
+# Where HY-MT runs. On a Mac it stays on the CPU: on Metal it pushed the
+# recogniser past its step budget (see module doc). R2D2_MT_DEVICE overrides.
+DEVICE = os.environ.get("R2D2_MT_DEVICE") or "cpu"
+if DEVICE not in ("cpu", "gpu"):
+    raise ValueError(f"R2D2_MT_DEVICE must be cpu or gpu, not {DEVICE!r}")
 # The model card's two templates with the model's own chat framing: the
 # Chinese instruction for ZH<=>XX, naming the target in Chinese, and the
 # English one for every other pair. Its contextual template was tried and
@@ -165,8 +171,9 @@ class Translator:
         if not model.is_file():
             raise RuntimeError(f"Missing local translation model: {model}")
         self.process, self.client, self.log = start_llama_server(
-            # -ngl 0 keeps the Metal queue for the recogniser; see module doc.
-            [str(model), "-ngl", "0", "-t", str(THREADS), "-c", "2048", "--cache-ram", "0"],
+            # -ngl 0 keeps the GPU queue for the recogniser; see DEVICE.
+            [str(model), "-ngl", "99" if DEVICE == "gpu" else "0", "-t", str(THREADS),
+             "-c", "2048", "--cache-ram", "0"],
             "translate-server.log", "Translation model", timeout=60)
         self.translate("Hello.")
 

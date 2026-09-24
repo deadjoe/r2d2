@@ -43,7 +43,7 @@ function showTranslation() {
   $('translation-title').textContent = `TRANSLATION → ${target.toUpperCase()}`;
   $('translate-hint').textContent = target === 'off' ? 'Recognition only.'
     : target === $('language').value ? 'Same as the spoken language: recognition only.'
-    : 'HY-MT1.5 1.8B on CPU. Per sentence, grey preview.';
+    : `HY-MT1.5 1.8B on ${mtDevice}. Per sentence, grey preview.`;
 }
 function renderTranslation(text, draft = '') {
   $('t-confirmed').textContent = text; $('t-draft').textContent = draft;
@@ -60,7 +60,7 @@ function renderText(text, draft = '') {
   const area = $('transcript-area');
   if (area.scrollHeight - area.scrollTop - area.clientHeight < 160) area.scrollTop = area.scrollHeight;
 }
-let appVersion = '';
+let appVersion = '', mtDevice = 'CPU';
 // Service line: the recognition model the next session will use (the one selected
 // here, not merely whatever the server has loaded) and the translation model.
 async function health() {
@@ -77,6 +77,7 @@ async function health() {
       button.title = missing ? 'Not installed on this machine' : '';
     }
     const mt = data.translation;
+    if (mt.device && mtDevice !== mt.device.toUpperCase()) { mtDevice = mt.device.toUpperCase(); showTranslation(); }
     const mtText = !mt.available ? 'MT unavailable' : {ready: 'MT ready', loading: 'MT loading', error: 'MT failed to load', unloaded: 'MT loads on first use'}[mt.state];
     const loaded = modelNames[data.backend];
     if (data.busy) show('busy', `Recognizing · ${loaded} · ${mtText}`);
@@ -175,7 +176,7 @@ function openSocket() {
       if (data.type === 'ready') {
         clearTimeout(timeout); ready = true; state('Listening');
         current.translation = data.translate ? {target: data.target, text: '', updates: [], sentences: []} : null;
-        $('translation-state').textContent = data.translate ? 'HY-MT1.5 · 1.8B · CPU' : current.translate_error ? 'Translation unavailable' : 'Not translating';
+        $('translation-state').textContent = data.translate ? `HY-MT1.5 · 1.8B · ${mtDevice}` : current.translate_error ? 'Translation unavailable' : 'Not translating';
         resolve();
       }
       if (data.type === 'translation_error') {
@@ -221,7 +222,7 @@ function begin(source, processing) {
     date: new Date().toISOString(), samples: 0, text: '', updates: [], resets: [], note: '',
     translation: null, translate_error: ''};
   renderText(''); renderTranslation(''); showTranslation();
-  $('translation-state').textContent = translating() ? 'HY-MT1.5 · 1.8B · CPU' : 'Not translating'; $('timer').textContent = '00:00';
+  $('translation-state').textContent = translating() ? `HY-MT1.5 · 1.8B · ${mtDevice}` : 'Not translating'; $('timer').textContent = '00:00';
   $('session-engine').textContent = modelNames[selected];
   $('source-label').textContent = source === 'microphone' ? 'MICROPHONE' : 'AUDIO REPLAY';
   ['first', 'decode', 'backlog', 'lag'].forEach(id => metric(id, null));
@@ -406,7 +407,7 @@ $('copy-translation').addEventListener('click', async () => {
 $('export').addEventListener('click', () => {
   const entries = current && !runs.some(r => r.id === current.id) ? [current, ...runs] : runs;
   const blob = new Blob([JSON.stringify({app: 'R2D2', version: appVersion, policy: '160ms hop / 160ms lookahead / 8s window / 1 token rollback / merges up to 3 hops when behind',
-    translation_policy: 'HY-MT1.5-1.8B Q4_K_M on CPU / greedy / settle per closed sentence / latest-wins draft', runs: entries}, null, 2)], {type: 'application/json'});
+    translation_policy: `HY-MT1.5-1.8B Q4_K_M on ${mtDevice} / greedy / settle per closed sentence / latest-wins draft`, runs: entries}, null, 2)], {type: 'application/json'});
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
   link.download = `r2d2-${new Date().toISOString().replaceAll(':', '-')}.json`; link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);

@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from .backends import GGUFBackend, MLXBackend, GGUF_PATH, GGUF_VARIANTS, MLX_PATH, MLX_SUPPORTED
 from .streaming import Stream, RATE, HOP, WINDOW, MAX_HOPS
-from .translate import LiveTranslation, Translator, MT_FILE
+from .translate import LiveTranslation, Translator, MT_FILE, DEVICE as MT_DEVICE
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
@@ -112,7 +112,7 @@ class TranslationEngine:
         return await self.call(self.translator.translate, text, abort, target)
 
     def status(self):
-        return {"model": MT_FILE, "available": Translator.available(), "state": self.state,
+        return {"model": MT_FILE, "device": MT_DEVICE, "available": Translator.available(), "state": self.state,
                 "error": self.error}
 
     async def close(self):

@@ -247,3 +247,7 @@ def test_a_missing_llama_server_says_how_to_get_one(monkeypatch):
     monkeypatch.setattr(backends.shutil, "which", lambda name: None)
     with pytest.raises(RuntimeError, match="llama-server is missing"):
         backends.start_llama_server([], "x.log", "Test")
+
+
+def test_status_says_where_translation_runs(client):
+    assert client.get("/api/status").json()["translation"]["device"] in ("cpu", "gpu")
