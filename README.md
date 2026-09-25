@@ -23,6 +23,12 @@ Ada (16 GB) under Ubuntu 24.04 with CUDA 12.8. All keep up in real time.
 
 ## Install
 
+Get the code:
+
+```bash
+git clone https://github.com/deadjoe/r2d2 && cd r2d2
+```
+
 Install `llama-server`. On a Mac:
 
 ```bash
@@ -43,6 +49,9 @@ export R2D2_LLAMA_SERVER=$PWD/build/bin/llama-server   # or put it on PATH
 cd -
 ```
 
+`R2D2_LLAMA_SERVER` lasts only for this shell. In a new one, export it again (or add it to
+your shell profile) before `./server.sh start`, or recognition fails when it starts.
+
 Then install the app and download the models:
 
 ```bash
@@ -62,7 +71,10 @@ uv run hf download tencent/Hy-MT2-1.8B-GGUF \
 
 Pinned revisions and SHA-256 of all weights are in
 [models-manifest.json](models-manifest.json). After download the app runs
-offline.
+offline. Instead of the three downloads above, `uv run python -m r2d2.fetch`
+fetches the same files from those pinned revisions, resumes an interrupted
+download and checks every file's SHA-256 (`--check` verifies only;
+`--set default,q4` adds Q4_K_M).
 
 Optional models, shown greyed out on the page until present:
 
@@ -83,7 +95,9 @@ target, and press **Start listening**. Models load on first use.
 
 Browsers allow the microphone only on `localhost` or HTTPS. For a remote Linux
 machine, forward the port and open `localhost`:
-`ssh -L 8765:localhost:8765 <host>`.
+`ssh -L 8765:localhost:8765 <host>`. A cloud GPU's HTTPS proxy works as well
+(RunPod: `https://<pod>-8765.proxy.runpod.net`); such a URL is public, so set
+`R2D2_ACCESS_KEY` there (see below).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -92,6 +106,38 @@ machine, forward the port and open `localhost`:
 | `R2D2_LLAMA_SERVER` | `llama-server` on `PATH` | llama.cpp server binary |
 | `R2D2_MT_DEVICE` | `cpu` on a Mac, `gpu` on Linux | Where translation runs |
 | `R2D2_MT_THREADS` | `6` | Translation threads when on the CPU |
+| `R2D2_ACCESS_KEY` | unset | 16-128 of `A-Za-z0-9_-`: the page, API and audio socket then need it; open `/?k=<key>` once and a cookie carries it |
+
+## Container (Linux + NVIDIA)
+
+A prebuilt image with the app and a CUDA build of `llama-server` for every GPU
+generation from Turing (T4) to Blackwell (RTX 50, RTX PRO). It contains no
+weights: on first start it downloads the default set (3.3 GB) into `/data`, from
+the pinned revisions, and verifies each file's SHA-256; with `/data` on a volume,
+later starts reuse the files and check them in milliseconds.
+
+```bash
+docker run --gpus all -p 8765:8765 -v r2d2-data:/data ghcr.io/deadjoe/r2d2:latest
+```
+
+Needs an NVIDIA driver with CUDA 12.8 (R570 or newer) and the NVIDIA Container
+Toolkit. Open <http://localhost:8765> once the log says `ready`. The start script
+(`deploy/docker/r2d2-start.sh`) checks the GPU, fetches the weights, starts the
+app and loads the recogniser, and stays up with a clear error if a step fails.
+
+| Variable | Purpose |
+| --- | --- |
+| `R2D2_ACCESS_KEY` | Set it whenever the port is reachable from other machines |
+| `R2D2_MODEL_SETS` | `default` (Q8_0 + Hy-MT2); `default,q4` or `default,f16` add those builds |
+| `R2D2_PROGRESS_URL` / `R2D2_PROGRESS_TOKEN` | Optional: each start step is POSTed there as JSON |
+| `PUBLIC_KEY` | Optional: an SSH public key; sshd then runs (RunPod sets it) |
+
+On RunPod: create a pod from the image with `8765/http` exposed, at least 20 GB of
+container disk and `R2D2_ACCESS_KEY` set, then open
+`https://<pod>-8765.proxy.runpod.net/?k=<key>`. A personal one-tap launcher that
+does this and deletes the pod after a time limit is in
+[deadjoe/r2d2_pod](https://github.com/deadjoe/r2d2_pod). The image is built by
+`.github/workflows/image.yml` on version tags.
 
 ## How it works
 
@@ -122,8 +168,9 @@ affecting recognition accuracy. See [docs/translation.md](docs/translation.md).
 
 - One session at a time, up to 5 minutes; imported audio up to 100 MB.
 - A session stops if recognition falls more than 10 s behind.
-- Audio goes only to the local recognition service and is never written to
-  disk. Inference processes listen only on loopback.
+- Audio goes only to the recognition service you run (this machine, or the GPU
+  host you deployed it to) and is never written to disk. Inference processes
+  listen only on loopback.
 
 ## Third-party models and code
 

@@ -1,6 +1,6 @@
 [project]
 name = "r2d2-listening-room"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local Confucius4-R2T2 streaming recognition and live translation on Apple Silicon and Linux/CUDA"
 requires-python = ">=3.12,<3.13"
 dependencies = [
