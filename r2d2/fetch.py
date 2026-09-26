@@ -6,10 +6,13 @@
 
 Every file comes from its pinned Hugging Face revision. A download goes to
 <file>.part and an interrupted one resumes from there with an HTTP range
-request, in this run or the next; a failed one is retried with backoff; a file
-whose size or SHA-256 differs from the manifest is deleted and fetched again. A file hashed once is recorded with its size and mtime in
-<root>/.r2d2-verified.json, so later starts check it in milliseconds; delete
-that file to force a full re-hash.
+request, in this run or the next; a failed one is retried with backoff. The
+.part takes the file's real name only once its SHA-256 matches, so a file under
+its real name is always a verified one, even while another fetch is running (the
+app offers a model as soon as its files exist). A file whose size or SHA-256
+differs from the manifest is deleted and fetched again. A file hashed once is
+recorded with its size and mtime in <root>/.r2d2-verified.json, so later starts
+check it in milliseconds; delete that file to force a full re-hash.
 """
 from __future__ import annotations
 
@@ -79,11 +82,15 @@ def verify(dest: Path, entry: dict) -> str | None:
     return None if actual == entry["sha256"] else f"sha256 {actual[:12]}…, expected {entry['sha256'][:12]}…"
 
 
+def part_of(dest: Path) -> Path:
+    return dest.with_name(dest.name + ".part")
+
+
 def download(entry: dict, dest: Path):
     """Fetch the pinned URL into <dest>.part, continuing from whatever is there."""
     import httpx
 
-    part = dest.with_name(dest.name + ".part")
+    part = part_of(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     have = part.stat().st_size if part.exists() else 0
     if have > entry["bytes"]:
@@ -108,8 +115,6 @@ def download(entry: dict, dest: Path):
                 if time.monotonic() - last > 30:
                     last = time.monotonic()
                     log(f"          {dest.name} {gb(have)} / {gb(entry['bytes'])}")
-    if have == entry["bytes"]:
-        part.replace(dest)
 
 
 def fetch(sets: list[str], root: Path, attempts: int = 6, check_only: bool = False) -> bool:
@@ -146,9 +151,12 @@ def fetch(sets: list[str], root: Path, attempts: int = 6, check_only: bool = Fal
         for attempt in range(1, attempts + 1):
             t = time.monotonic()
             log(f"download  {label}, attempt {attempt}/{attempts}")
+            part = part_of(dest)
             try:
                 download(entry, dest)
-                problem = verify(dest, entry)
+                problem = verify(part, entry)
+                if problem is None:
+                    part.replace(dest)
             except Exception as exc:  # network, HTTP 5xx, disk: all worth another try
                 problem = f"{type(exc).__name__}: {str(exc)[:200]}"
             if problem is None:
@@ -157,8 +165,8 @@ def fetch(sets: list[str], root: Path, attempts: int = 6, check_only: bool = Fal
                 log(f"ok        {label}, downloaded and verified in {time.monotonic() - t:.0f} s")
                 break
             log(f"retry     {label}: {problem}")
-            if dest.exists():
-                dest.unlink()  # complete but wrong: start that file over
+            if part.exists() and part.stat().st_size >= entry["bytes"]:
+                part.unlink()  # complete but wrong: start that file over
             if attempt < attempts:
                 time.sleep(min(60, 5 * 2 ** (attempt - 1)))
         else:

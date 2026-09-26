@@ -112,9 +112,11 @@ machine, forward the port and open `localhost`:
 
 A prebuilt image with the app and a CUDA build of `llama-server` for every GPU
 generation from Turing (T4) to Blackwell (RTX 50, RTX PRO). It contains no
-weights: on first start it downloads the default set (3.3 GB) into `/data`, from
-the pinned revisions, and verifies each file's SHA-256; with `/data` on a volume,
-later starts reuse the files and check them in milliseconds.
+weights: on first start it downloads the default set (Q8_0 + Hy-MT2, 3.3 GB) into
+`/data`, from the pinned revisions, and verifies each file's SHA-256; with `/data`
+on a volume, later starts reuse the files and check them in milliseconds. Once the
+app is ready, the F16 recogniser (4.1 GB more) downloads in the background; its
+button on the page turns on when both files are in and verified.
 
 ```bash
 docker run --gpus all -p 8765:8765 -v r2d2-data:/data ghcr.io/deadjoe/r2d2:latest
@@ -128,7 +130,8 @@ app and loads the recogniser, and stays up with a clear error if a step fails.
 | Variable | Purpose |
 | --- | --- |
 | `R2D2_ACCESS_KEY` | Set it whenever the port is reachable from other machines |
-| `R2D2_MODEL_SETS` | `default` (Q8_0 + Hy-MT2); `default,q4` or `default,f16` add those builds |
+| `R2D2_MODEL_SETS` | Sets fetched before the app starts; `default` (Q8_0 + Hy-MT2) |
+| `R2D2_EXTRA_SETS` | Sets fetched in the background once the app is ready; `f16`, empty for none, `f16,q4` adds Q4_K_M |
 | `R2D2_PROGRESS_URL` / `R2D2_PROGRESS_TOKEN` | Optional: each start step is POSTed there as JSON |
 | `PUBLIC_KEY` | Optional: an SSH public key; sshd then runs (RunPod sets it) |
 

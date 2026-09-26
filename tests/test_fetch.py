@@ -84,11 +84,25 @@ def test_a_wrong_file_is_replaced_and_a_verified_one_is_not_rehashed(setup, monk
     assert fetch.fetch(["default"], root, check_only=True)
 
 
+def test_a_download_takes_its_real_name_only_after_its_hash_matches(setup, monkeypatch):
+    root, dest, serve = setup
+    serve(Server())
+    real = fetch.sha256
+
+    def hashed(path):
+        assert not dest.exists(), "the app could offer an unverified file"
+        return real(path)
+    monkeypatch.setattr(fetch, "sha256", hashed)
+    assert fetch.fetch(["default"], root)
+    assert dest.read_bytes() == BLOB
+
+
 def test_bad_bytes_from_the_server_fail_after_the_retries(setup):
     root, dest, serve = setup
     serve(Server(body=bytes(len(BLOB))))
     assert not fetch.fetch(["default"], root, attempts=2)
     assert not dest.exists()
+    assert not dest.with_name("blob.bin.part").exists()
 
 
 def test_check_only_reports_a_missing_file_without_downloading(setup):

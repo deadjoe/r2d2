@@ -1,7 +1,9 @@
 #!/bin/bash
-# Bring R2D2 up inside the container: GPU check → model files → app → recogniser loaded.
+# Bring R2D2 up inside the container: GPU check → model files → app → recogniser loaded,
+# then the optional builds downloaded in the background.
 # Each step goes to stdout and, when R2D2_PROGRESS_URL is set, to that URL as JSON
-# (bearer R2D2_PROGRESS_TOKEN): {"step": gpu|weights|start|ready, "status": started|done|failed}.
+# (bearer R2D2_PROGRESS_TOKEN): {"step": gpu|weights|start|ready|extra, "status": started|done|failed}.
+# A failed "extra" leaves the app running; that build just stays unavailable on the page.
 set -uo pipefail
 cd /app || exit 1
 PORT="${PORT:-8765}"
@@ -48,8 +50,9 @@ echo "$PROBE" | grep -q "CUDA0" \
   || fail gpu "llama-server sees no CUDA device (driver too old for CUDA 12.8?): $(echo "$PROBE" | tail -3 | tr '\n' ' ')"
 progress gpu "done" "$GPU"
 
-# 2. Model files, downloaded once into /data and verified against the manifest.
+# 2. Model files the app starts with, downloaded once into /data and verified against the manifest.
 SETS="${R2D2_MODEL_SETS:-default}"
+EXTRA_SETS="${R2D2_EXTRA_SETS-f16}"  # set but empty: none
 progress weights started "sets: $SETS"
 python -m r2d2.fetch --set "$SETS" 2>&1 | tee /tmp/fetch.log
 [[ "${PIPESTATUS[0]}" == 0 ]] || fail weights "$(tail -1 /tmp/fetch.log)"
@@ -75,5 +78,20 @@ echo "$LOADED" | grep -q '"state": *"ready"' || fail start "the recogniser did n
 URL="http://localhost:$PORT"
 [[ -n "${RUNPOD_POD_ID:-}" ]] && URL="https://${RUNPOD_POD_ID}-${PORT}.proxy.runpod.net"
 progress ready "done" "$URL"
+
+# 4. Optional builds while the app runs. r2d2.fetch gives a file its real name only once
+# verified, and the page offers a build once all its files exist.
+if [[ -n "$EXTRA_SETS" ]]; then
+  (
+    progress extra started "sets: $EXTRA_SETS"
+    python -m r2d2.fetch --set "$EXTRA_SETS" 2>&1 | tee /tmp/fetch-extra.log
+    if [[ "${PIPESTATUS[0]}" == 0 ]]; then
+      progress extra "done" "$(tail -1 /tmp/fetch-extra.log | sed 's/^\[fetch\] //')"
+    else
+      progress extra failed "$(tail -1 /tmp/fetch-extra.log)"
+    fi
+  ) &
+fi
+
 wait "$APP_PID"
 fail start "the app exited (code $?)"
